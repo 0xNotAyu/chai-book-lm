@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect ,useState } from "react";
 
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 
@@ -36,11 +36,19 @@ export function RenameNotebookDialog({
   const [emoji, setEmoji] = useState(notebook?.emoji ?? "📙");
   const [showPicker, setShowPicker] = useState(false);
 
+  useEffect(() => {
+  if (open && notebook) {
+    setName(notebook.title);
+    setEmoji(notebook.emoji);
+  }
+}, [open, notebook]);
+  
   async function handleRename() {
+
   if (!notebook) return;
 
   try {
-    const res = await fetch(`/api/notebooks/${notebook.id}`, {
+    const res = await fetch(`/api/notebooks/${notebook?.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -104,7 +112,7 @@ export function RenameNotebookDialog({
         />
 
         <DialogFooter>
-          <Button variant="outline">Cancel</Button>
+          <Button variant="outline"  onClick={() => onOpenChange(false)}>Cancel</Button>
 
           <Button
             onClick={handleRename}

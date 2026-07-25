@@ -30,6 +30,9 @@ export default function Dashboard() {
     fetchNotebooks();
   }, []);
 
+      useEffect(() => {
+}, [selectedNotebook]);
+
   async function fetchNotebooks() {
     try {
       setIsLoading(true);
@@ -79,11 +82,15 @@ export default function Dashboard() {
   }
 
   async function handleRename(id: string) {
+
+
+    
   const notebook = notebooks.find((notebook) => notebook.id === id);
 
   if (!notebook) return;
 
   setSelectedNotebook(notebook);
+
 }
 
   return (
@@ -96,6 +103,7 @@ export default function Dashboard() {
           onOpenChange={setDialogOpen}
           onCreate={handleCreateNotebook}
         />
+        
         <RenameNotebookDialog
           open={isRenameDialogOpen}
           onOpenChange={(open) => {

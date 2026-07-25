@@ -77,7 +77,7 @@ export function NotebookCard({
             
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent side="right">
             <DropdownMenuItem
               onClick={(e) => {
                 e.stopPropagation();
@@ -89,6 +89,7 @@ export function NotebookCard({
             </DropdownMenuItem>
 
             <DropdownMenuItem
+            variant="destructive"
               className="text-destructive focus:text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
