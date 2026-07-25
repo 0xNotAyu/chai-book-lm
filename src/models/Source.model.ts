@@ -15,7 +15,7 @@ export const SourceSchema = new Schema(
 
     sourceType: {
       type: String,
-      enum: ["pdf", "youtube", "website", "text"],
+      enum: ["pdf", "youtube", "website", "text", "vtt"],
       required: true,
     },
 
@@ -27,6 +27,11 @@ export const SourceSchema = new Schema(
       type: String,
       enum: ["processing", "completed", "failed"],
       default: "processing",
+    },
+
+    errorMessage: {
+      type: String,
+      default: null,
     },
   },
   {

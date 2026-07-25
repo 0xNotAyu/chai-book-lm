@@ -2,12 +2,14 @@
 'use client';
 
 import { useState } from "react";
-import { 
-  FileText, 
-  Globe, 
-  Type, 
-  Loader2, 
-  CheckCircle2, 
+import { useRouter } from "next/navigation";
+import {
+  FileText,
+  Globe,
+  Type,
+  FileVideo,
+  Loader2,
+  CheckCircle2,
   AlertCircle,
   Trash2
 } from "lucide-react";
@@ -22,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export type SourceType = 'pdf' | 'youtube' | 'website' | 'text';
+export type SourceType = 'pdf' | 'youtube' | 'website' | 'text' | 'vtt';
 export type SourceStatus = 'processing' | 'completed' | 'failed';
 
 export interface Source {
@@ -32,6 +34,7 @@ export interface Source {
   url?: string;
   sourceType: SourceType;
   status: SourceStatus;
+  errorMessage?: string | null;
 }
 
 interface SourceListProps {
@@ -41,27 +44,28 @@ interface SourceListProps {
 }
 
 // 1. Source Item Component
-function SourceItem({ source,notebookId, onDeleted }: { source: Source,notebookId: string, onDeleted?: (id: string) => void }) {
+function SourceItem({ source, notebookId, onDeleted }: { source: Source, notebookId: string, onDeleted?: (id: string) => void }) {
+  const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      // NOTE: Update this URL to match your exact backend route structure
       const response = await fetch(`/api/notebooks/${notebookId}/sources/${source._id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete source');
-      
+
       onDeleted?.(source._id);
+      router.refresh(); // re-fetch sources on the server component
+      setShowDeleteDialog(false);
     } catch (error) {
       console.error("Error deleting source:", error);
       // Optional: Add a toast notification here for errors
     } finally {
       setIsDeleting(false);
-      setShowDeleteDialog(false);
     }
   };
 
@@ -73,7 +77,8 @@ function SourceItem({ source,notebookId, onDeleted }: { source: Source,notebookI
       </svg>
     ),
     website: <Globe className="w-4 h-4 text-zinc-500" />,
-    text: <Type className="w-4 h-4 text-zinc-500" />
+    text: <Type className="w-4 h-4 text-zinc-500" />,
+    vtt: <FileVideo className="w-4 h-4 text-purple-500" />,
   }[source.sourceType];
 
   const StatusIcon = {
@@ -84,7 +89,10 @@ function SourceItem({ source,notebookId, onDeleted }: { source: Source,notebookI
 
   return (
     <>
-      <div className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors group cursor-pointer border border-transparent hover:border-border">
+      <div
+        className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors group cursor-pointer border border-transparent hover:border-border"
+        title={source.status === "failed" && source.errorMessage ? source.errorMessage : undefined}
+      >
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="shrink-0 bg-background p-1.5 rounded-md border shadow-sm">
             {TypeIcon}
@@ -98,14 +106,14 @@ function SourceItem({ source,notebookId, onDeleted }: { source: Source,notebookI
             </span>
           </div>
         </div>
-        
+
         {/* Actions Container */}
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {/* Status shown by default, hidden on hover */}
           <div className="block group-hover:hidden" title={`Status: ${source.status}`}>
             {StatusIcon}
           </div>
-          
+
           {/* Trash shown only on hover */}
           <button
             onClick={(e) => {
@@ -124,13 +132,13 @@ function SourceItem({ source,notebookId, onDeleted }: { source: Source,notebookI
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the source 
+              This action cannot be undone. This will permanently delete the source
               "{source.title || source.fileName}" and remove its extracted data from your notebook.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 handleDelete();
@@ -158,7 +166,7 @@ export function SourceList({ notebookId, sources = [], onSourceDeleted }: Source
       <div className="px-4 py-3 border-b">
         <h3 className="text-sm font-semibold tracking-tight">Your Sources</h3>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {sources.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center p-4 mt-4 bg-muted/30 rounded-lg border border-dashed">
@@ -166,11 +174,11 @@ export function SourceList({ notebookId, sources = [], onSourceDeleted }: Source
           </div>
         ) : (
           sources.map((source) => (
-            <SourceItem 
-              key={source._id} 
-              source={source} 
+            <SourceItem
+              key={source._id}
+              source={source}
               notebookId={notebookId}
-              onDeleted={onSourceDeleted} 
+              onDeleted={onSourceDeleted}
             />
           ))
         )}

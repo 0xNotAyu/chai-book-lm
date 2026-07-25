@@ -5,11 +5,16 @@ export const createSourceSchema = z.object({
 
   title: z.string().trim().min(1).max(100),
 
-  sourceType: z.enum(["pdf", "youtube", "website", "text"]),
+  sourceType: z.enum(["pdf", "youtube", "website", "text", "vtt"]),
 
   url: z.string().url().optional(),
 
   fileName: z.string().optional(),
+
+  // Raw pasted text (used for "text" sources that come from the paste-text
+  // dialog step, as opposed to an uploaded .txt file which is read from the
+  // multipart file buffer instead).
+  textContent: z.string().optional(),
 
   status: z
     .enum(["processing", "completed", "failed"])

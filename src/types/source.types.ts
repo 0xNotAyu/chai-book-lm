@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 
-export type SourceType = "pdf" | "youtube" | "website" | "text";
+export type SourceType = "pdf" | "youtube" | "website" | "text" | "vtt";
 
 export type SourceStatus =
   | "processing"
@@ -21,6 +21,8 @@ export interface Source {
   fileName?: string;
 
   status: SourceStatus;
+
+  errorMessage?: string | null;
 
   createdAt?: Date;
   updatedAt?: Date;

@@ -1,12 +1,11 @@
 // src/app/notebook/[id]/page.tsx
-import { Plus, Search, ChevronDown, FileText, PanelLeftClose, TrendingUp, Sparkles } from "lucide-react";
+import { Plus, FileText, PanelLeftClose, TrendingUp } from "lucide-react";
 import { SourceList } from "@/components/notebook/workspace/SourceList";
 import { ChatWorkspace } from "@/components/notebook/workspace/ChatWorkspace";
 import { UniversalSourceArea } from "@/components/notebook/workspace/UniversalSourceArea";
 import { sourceService } from "@/services/source.services";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 
 interface NotebookPageProps {
   params: Promise<{
@@ -57,6 +56,7 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
           <div className="px-4 pb-3 flex flex-col gap-3">
             {/* The only entry point for adding a source */}
             <UniversalSourceArea
+              notebookId={id}
               trigger={
                 <Button
                   variant="outline"
@@ -67,8 +67,6 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
                 </Button>
               }
             />
-
-            
           </div>
 
           <ScrollArea className="flex-1">

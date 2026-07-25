@@ -1,13 +1,12 @@
-
 import connectMongoDB from "@/lib/mongodb";
 import Source from "../models/Source.model";
 
-
-import { 
-  extractPdf, 
-  extractYoutube, 
-  extractWebsite, 
-  extractText 
+import {
+  extractPdf,
+  extractYoutube,
+  extractWebsite,
+  extractText,
+  extractVtt,
 } from "@/lib/extractors/index";
 
 class SourceService {
@@ -15,13 +14,13 @@ class SourceService {
     data: {
       notebookId: string;
       title: string;
-      sourceType: "pdf" | "youtube" | "website" | "text";
+      sourceType: "pdf" | "youtube" | "website" | "text" | "vtt";
       url?: string;
       fileName?: string;
-      textContent?: string; // Added to pass raw pasted text down
+      textContent?: string; // raw pasted text (paste-text dialog step)
       status?: "processing" | "completed" | "failed";
     },
-    fileBuffer?: Buffer // Added to pass PDF binary data down
+    fileBuffer?: Buffer // binary data for pdf / vtt / uploaded .txt files
   ) {
     await connectMongoDB();
 
@@ -42,40 +41,61 @@ class SourceService {
           if (!fileBuffer) throw new Error("No file buffer provided for PDF.");
           extractedText = await extractPdf(fileBuffer);
           break;
-        
+
+        case "vtt":
+          if (!fileBuffer) throw new Error("No file buffer provided for VTT.");
+          extractedText = await extractVtt(fileBuffer);
+          break;
+
         case "youtube":
           if (!data.url) throw new Error("No URL provided for YouTube.");
           extractedText = await extractYoutube(data.url);
           break;
-        
+
         case "website":
           if (!data.url) throw new Error("No URL provided for Website.");
           extractedText = await extractWebsite(data.url);
           break;
-        
+
         case "text":
-          if (!data.textContent) throw new Error("No text content provided.");
-          extractedText = await extractText(data.textContent);
+          // Either a pasted text string, or an uploaded .txt file buffer.
+          if (fileBuffer) {
+            extractedText = await extractText(fileBuffer.toString("utf-8"));
+          } else if (data.textContent) {
+            extractedText = await extractText(data.textContent);
+          } else {
+            throw new Error("No text content provided.");
+          }
           break;
-        
+
         default:
           throw new Error(`Unsupported source type: ${data.sourceType}`);
       }
 
-      // [UPCOMING STEP] - Indexing to Qdrant will go here
+      if (!extractedText || !extractedText.trim()) {
+        throw new Error("No content could be extracted from this source.");
+      }
+
+      // [UPCOMING STEP] - Chunking + embedding + Qdrant indexing will go here
       // await vectorService.indexDocument(sourceDoc._id, extractedText);
 
       // 3. Mark as completed upon successful extraction (and future indexing)
-      await this.updateSource(sourceDoc._id.toString(), { status: "completed" });
-      
-      // Update local object to reflect the DB change before returning
-      sourceDoc.status = "completed"; 
+      await this.updateSource(sourceDoc._id.toString(), {
+        status: "completed",
+      });
 
+      // Update local object to reflect the DB change before returning
+      sourceDoc.status = "completed";
     } catch (error) {
-      console.error(`Processing failed for source ${sourceDoc._id}:`, error);
-      
+      const message =
+        error instanceof Error ? error.message : "Failed to process source";
+      console.error(`Processing failed for source ${sourceDoc._id}:`, message);
+
       // Mark as failed if the extractor throws an error
-      await this.updateSource(sourceDoc._id.toString(), { status: "failed" });
+      await this.updateSource(sourceDoc._id.toString(), {
+        status: "failed",
+        errorMessage: message,
+      });
       sourceDoc.status = "failed";
     }
 
@@ -101,10 +121,11 @@ class SourceService {
     id: string,
     data: {
       title?: string;
-      sourceType?: "pdf" | "youtube" | "website" | "text";
+      sourceType?: "pdf" | "youtube" | "website" | "text" | "vtt";
       url?: string;
       fileName?: string;
       status?: "processing" | "completed" | "failed";
+      errorMessage?: string | null;
     }
   ) {
     await connectMongoDB();

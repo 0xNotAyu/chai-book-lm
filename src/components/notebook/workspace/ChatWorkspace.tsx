@@ -31,7 +31,7 @@ export function ChatWorkspace({ hasSources, sourceCount }: ChatWorkspaceProps) {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col gap-6 pt-6">
-              <div className="text-center text-zinc-500 mt-20 text-sm">
+              <div className="text-center text-zinc-500 h-full text-sm">
                 Chat conversation active...
                 {/*
                   When rendering citations in a message, each citation chip
