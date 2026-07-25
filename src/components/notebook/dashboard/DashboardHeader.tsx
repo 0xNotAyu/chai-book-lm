@@ -20,7 +20,7 @@ export function DashboardHeader({
         </p>
       </div>
 
-      <Button variant="outline" onClick={onNewNotebook}>
+      <Button variant="outline" size="icon" onClick={onNewNotebook}>
         <Plus className="h-4 w-4" />
       </Button>
     </header>
