@@ -9,6 +9,7 @@ import { CreateNotebookDialog } from "@/components/notebook/dashboard/CreateNote
 import { EmptyNotebookState } from "@/components/notebook/dashboard/EmptyNotebookState";
 import { LoadingState } from "@/components/notebook/dashboard/LoadingState";
 import { RenameNotebookDialog } from "@/components/notebook/dashboard/RenameNotebookDialog";
+import { DeleteNotebookDialog } from "./DeleteNotebookDialog";
 
 interface Notebook {
   id: string;
@@ -24,7 +25,9 @@ export default function Dashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null);
 
-  const isRenameDialogOpen = selectedNotebook !== null;
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
   
   useEffect(() => {
     fetchNotebooks();
@@ -82,16 +85,20 @@ export default function Dashboard() {
   }
 
   async function handleRename(id: string) {
-
-
-    
-  const notebook = notebooks.find((notebook) => notebook.id === id);
-
+  const notebook = notebooks.find(n => n.id === id);
   if (!notebook) return;
 
   setSelectedNotebook(notebook);
+  setIsRenameDialogOpen(true);
 
 }
+  async function handleDelete(id: string) {
+  const notebook = notebooks.find(n => n.id === id);
+  if (!notebook) return;
+
+  setSelectedNotebook(notebook);
+  setIsDeleteDialogOpen(true);
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -108,11 +115,22 @@ export default function Dashboard() {
           open={isRenameDialogOpen}
           onOpenChange={(open) => {
             if (!open) {
-              setSelectedNotebook(null);
+              setIsRenameDialogOpen(open)
+              if (!open) setSelectedNotebook(null);
             }
           }}
           notebook={selectedNotebook}
           onRenameSuccess={fetchNotebooks}
+        />
+
+        <DeleteNotebookDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={(open) => {
+            setIsDeleteDialogOpen(open);
+          if (!open) setSelectedNotebook(null);
+          }}
+          notebook={selectedNotebook}
+          onDeleteSuccess={fetchNotebooks}
         />
 
         <section className="mt-12">
@@ -135,6 +153,7 @@ export default function Dashboard() {
                 selected={selectedNotebook?.id === notebook.id}
                 onSelect={() => setSelectedNotebook(notebook)}
                 onRename={handleRename}
+                onDelete={handleDelete}
               />
               ))}
             </NotebookGrid>

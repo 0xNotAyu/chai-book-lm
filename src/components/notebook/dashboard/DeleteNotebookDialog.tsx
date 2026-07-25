@@ -1,8 +1,4 @@
 "use client";
-
-import { Trash2 } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,26 +11,43 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface DashboardNotebook {
+  id: string;
+  title: string;
+  emoji: string;
+  sourceCount: number;
+  updatedAt: string;
+}
+
+
 interface DeleteNotebookDialogProps {
-  notebookName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  notebook: DashboardNotebook | null;
+  onDeleteSuccess: () => void;
 }
 
 export function DeleteNotebookDialog({
-  notebookName,
+  open,
+  onOpenChange,
+  notebook,
+  onDeleteSuccess,
 }: DeleteNotebookDialogProps) {
-  function handleDelete() {
-    console.log("Delete Notebook:", notebookName);
-  }
+  async function handleDelete() {
+  if (!notebook) return;
 
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger 
-        render= {
-          <Button variant="ghost" size="icon">
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-        }
-        />
+  const res = await fetch(`/api/notebooks/${notebook.id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) return;
+
+  onDeleteSuccess();     // Refresh notebooks
+  onOpenChange(false);   // Close dialog (selectedNotebook is cleared in Dashboard)
+}
+
+return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
 
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -42,7 +55,7 @@ export function DeleteNotebookDialog({
 
           <AlertDialogDescription>
             This will permanently delete{" "}
-            <span className="font-medium">{notebookName}</span> and all of its
+            <span className="font-medium">{notebook?.title}</span> and all of its
             sources. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -50,7 +63,7 @@ export function DeleteNotebookDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
 
-          <AlertDialogAction onClick={handleDelete}>
+          <AlertDialogAction onClick={handleDelete} variant='destructive'>
             Delete
           </AlertDialogAction>
         </AlertDialogFooter>
