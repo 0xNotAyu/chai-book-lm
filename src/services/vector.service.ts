@@ -22,7 +22,7 @@ export interface RetrievedChunk {
 
 let collectionReady: Promise<void> | null = null;
 
-/** Creates the shared Qdrant collection on first use. Idempotent. */
+/** Creates the shared Qdrant collection + required payload indexes on first use. Idempotent. */
 async function ensureCollection(): Promise<void> {
   if (!collectionReady) {
     collectionReady = (async () => {
@@ -34,6 +34,23 @@ async function ensureCollection(): Promise<void> {
           vectors: { size: EMBEDDING_DIMENSIONS, distance: "Cosine" },
         });
       }
+
+      // Qdrant requires an explicit payload index before you can filter on a
+      // field — both `deleteSourceVectors` (filters by sourceId) and
+      // `searchSimilarChunks` (filters by notebookId) need these to exist,
+      // or Qdrant throws 400 "Index required but not found".
+      // createPayloadIndex is idempotent-safe: if the index already exists,
+      // Qdrant just no-ops / returns ok, so it's fine to call on every boot.
+      await Promise.all([
+        qdrant.createPayloadIndex(COLLECTION_NAME, {
+          field_name: "sourceId",
+          field_schema: "keyword",
+        }),
+        qdrant.createPayloadIndex(COLLECTION_NAME, {
+          field_name: "notebookId",
+          field_schema: "keyword",
+        }),
+      ]);
     })().catch((err) => {
       collectionReady = null; // allow retry on next call
       throw err;
