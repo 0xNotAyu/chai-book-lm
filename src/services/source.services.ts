@@ -1,5 +1,6 @@
 import connectMongoDB from "@/lib/mongodb";
 import Source from "../models/Source.model";
+import { vectorService } from "./vector.service";
 
 import {
   extractPdf,
@@ -30,9 +31,10 @@ class SourceService {
       status: "processing", // Override any input to force processing state
     });
 
-    // 2. Payload Routing & Extraction Phase
-    // Note: In serverless Next.js, awaiting this blocks the API response until extraction finishes.
-    // For large files, you eventually may want to move this to a background job, but this is perfect for now.
+    // 2. Payload Routing, Extraction, Chunking, Embedding & Indexing Phase
+    // Note: In serverless Next.js, awaiting this blocks the API response until
+    // everything finishes. For large files, you'd eventually move this to a
+    // background job — fine for the scope of this project.
     try {
       let extractedText = "";
 
@@ -76,12 +78,20 @@ class SourceService {
         throw new Error("No content could be extracted from this source.");
       }
 
-      // [UPCOMING STEP] - Chunking + embedding + Qdrant indexing will go here
-      // await vectorService.indexDocument(sourceDoc._id, extractedText);
+      // Chunk -> embed -> store in Qdrant
+      const { chunkCount } = await vectorService.indexSource({
+        sourceId: sourceDoc._id.toString(),
+        notebookId: data.notebookId,
+        sourceType: data.sourceType,
+        title: data.title,
+        url: data.url,
+        rawText: extractedText,
+      });
 
-      // 3. Mark as completed upon successful extraction (and future indexing)
+      // 3. Mark as completed once extraction + indexing both succeed
       await this.updateSource(sourceDoc._id.toString(), {
         status: "completed",
+        chunkCount,
       });
 
       // Update local object to reflect the DB change before returning
@@ -91,7 +101,7 @@ class SourceService {
         error instanceof Error ? error.message : "Failed to process source";
       console.error(`Processing failed for source ${sourceDoc._id}:`, message);
 
-      // Mark as failed if the extractor throws an error
+      // Mark as failed if extraction, embedding, or indexing throws
       await this.updateSource(sourceDoc._id.toString(), {
         status: "failed",
         errorMessage: message,
@@ -126,6 +136,7 @@ class SourceService {
       fileName?: string;
       status?: "processing" | "completed" | "failed";
       errorMessage?: string | null;
+      chunkCount?: number;
     }
   ) {
     await connectMongoDB();
@@ -137,6 +148,14 @@ class SourceService {
 
   async deleteSource(id: string) {
     await connectMongoDB();
+
+    // Clean up vectors first. Don't let a Qdrant hiccup block the Mongo
+    // delete — log it instead, since an orphaned vector is recoverable
+    // (re-run a cleanup job) but a stuck "can't delete" UX is worse.
+    await vectorService.deleteSourceVectors(id).catch((err) => {
+      console.error(`Failed to delete vectors for source ${id}:`, err);
+    });
+
     return await Source.findByIdAndDelete(id);
   }
 }

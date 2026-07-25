@@ -33,6 +33,13 @@ export const SourceSchema = new Schema(
       type: String,
       default: null,
     },
+
+    // Number of vector chunks stored in Qdrant for this source (set after
+    // successful indexing). Useful for UI display + sanity-checking retrieval.
+    chunkCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

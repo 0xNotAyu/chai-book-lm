@@ -24,6 +24,8 @@ export interface Source {
 
   errorMessage?: string | null;
 
+  chunkCount?: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
