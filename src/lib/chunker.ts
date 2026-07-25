@@ -19,10 +19,10 @@ export interface RawChunk {
   endSeconds?: number;
 }
 
-const WORDS_PER_CHUNK = 220; // ~ roughly 300-400 tokens, comfortable for retrieval
-const WORD_OVERLAP = 40;
-const TIME_WINDOW_SECONDS = 40; // merge youtube/vtt cues into ~40s windows
-const TIME_WINDOW_MAX_CHARS = 900;
+const WORDS_PER_CHUNK = 280; // ~ roughly 300-400 tokens, comfortable for retrieval
+const WORD_OVERLAP = 50;
+const TIME_WINDOW_SECONDS = 60; // merge youtube/vtt cues into ~40s windows
+const TIME_WINDOW_MAX_CHARS = 1400;
 
 function splitWords(text: string, size: number, overlap: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);

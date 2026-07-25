@@ -89,7 +89,7 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
         </aside>
 
         {/* Chat + citation panel — client component, they share selectedSource state */}
-        <ChatWorkspace hasSources={hasSources} sourceCount={sources.length} />
+        <ChatWorkspace notebookId={id} hasSources={hasSources} sourceCount={sources.length} />
       </div>
 
       {/* Disclaimer Footer */}
