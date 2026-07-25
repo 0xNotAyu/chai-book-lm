@@ -1,10 +1,16 @@
-// src/components/dashboard/
+"use client";
 
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export function DashboardHeader() {
+interface DashboardHeaderProps {
+  onNewNotebook: () => void;
+}
+
+export function DashboardHeader({
+  onNewNotebook,
+}: DashboardHeaderProps) {
   return (
     <header className="flex items-center justify-between">
       <div>
@@ -14,9 +20,8 @@ export function DashboardHeader() {
         </p>
       </div>
 
-      <Button>
-        <Plus className="mr-2 h-4 w-4" />
-        New Notebook
+      <Button variant="outline" onClick={onNewNotebook}>
+        <Plus className="h-4 w-4" />
       </Button>
     </header>
   );

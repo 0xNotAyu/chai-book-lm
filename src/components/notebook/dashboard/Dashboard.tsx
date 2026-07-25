@@ -1,70 +1,138 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import { DashboardHeader } from "@/components/notebook/dashboard/DashboardHeader";
 import { NotebookGrid } from "@/components/notebook/dashboard/NotebookGrid";
 import { NotebookCard } from "@/components/notebook/dashboard/NotebookCard";
-import { RenameNotebookDialog } from "@/components/notebook/dashboard/RenameNotebookDialog";
-import { DeleteNotebookDialog } from "@/components/notebook/dashboard/DeleteNotebookDialog";
+import { CreateNotebookDialog } from "@/components/notebook/dashboard/CreateNotebookDialog";
 import { EmptyNotebookState } from "@/components/notebook/dashboard/EmptyNotebookState";
 import { LoadingState } from "@/components/notebook/dashboard/LoadingState";
+import { RenameNotebookDialog } from "@/components/notebook/dashboard/RenameNotebookDialog";
+
+interface Notebook {
+  id: string;
+  title: string;
+  emoji: string;
+  sourceCount: number;
+  updatedAt: string;
+}
 
 export default function Dashboard() {
-  // Temporary UI state (replace with API later)
-  const isLoading = false;
+  const [isLoading, setIsLoading] = useState(true);
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null);
 
-  const notebooks = [
-    {
-      id: "1",
-      title: "Machine Learning",
-      sourceCount: 5,
-      updatedAt: "2 hours ago",
-    },
-    {
-      id: "2",
-      title: "Deep Learning",
-      sourceCount: 12,
-      updatedAt: "1 day ago",
-    },
-    {
-      id: "3",
-      title: "LangChain Notes",
-      sourceCount: 8,
-      updatedAt: "3 hours ago",
-    },
-    {
-      id: "4",
-      title: "RAG Research",
-      sourceCount: 15,
-      updatedAt: "Just now",
-    },
-  ];
+  const isRenameDialogOpen = selectedNotebook !== null;
   
+  useEffect(() => {
+    fetchNotebooks();
+  }, []);
+
+  async function fetchNotebooks() {
+    try {
+      setIsLoading(true);
+
+      const res = await fetch("/api/notebooks");
+      const data = await res.json();
+
+      setNotebooks(
+        data.map((notebook: any) => ({
+          id: notebook._id,
+          title: notebook.title,
+          emoji: notebook.emoji,
+          sourceCount: notebook.sourceCount ?? 0,
+          updatedAt: notebook.updatedAt,
+        }))
+      );
+      
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleCreateNotebook(title: string, emoji: string) {
+    try {
+      const res = await fetch("/api/notebooks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title , emoji}),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+          console.log(data);
+          throw new Error(data.message);
+      }
+
+      setDialogOpen(false);
+      await fetchNotebooks();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async function handleRename(id: string) {
+  const notebook = notebooks.find((notebook) => notebook.id === id);
+
+  if (!notebook) return;
+
+  setSelectedNotebook(notebook);
+}
 
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <DashboardHeader />
+        <DashboardHeader onNewNotebook={() => setDialogOpen(true)} />
+
+        <CreateNotebookDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onCreate={handleCreateNotebook}
+        />
+        <RenameNotebookDialog
+          open={isRenameDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedNotebook(null);
+            }
+          }}
+          notebook={selectedNotebook}
+          onRenameSuccess={fetchNotebooks}
+        />
 
         <section className="mt-12">
           {isLoading ? (
             <LoadingState />
           ) : notebooks.length === 0 ? (
-            <EmptyNotebookState />
+            <EmptyNotebookState
+              onCreate={() => setDialogOpen(true)}
+            />
           ) : (
             <NotebookGrid>
               {notebooks.map((notebook) => (
                 <NotebookCard
-                  key={notebook.id}
-                  title={notebook.title}
-                  sourceCount={notebook.sourceCount}
-                  updatedAt={notebook.updatedAt}
-                />
+                key={notebook.id}
+                id={notebook.id}
+                emoji={notebook.emoji}
+                title={notebook.title}
+                sourceCount={notebook.sourceCount}
+                updatedAt={notebook.updatedAt}
+                selected={selectedNotebook?.id === notebook.id}
+                onSelect={() => setSelectedNotebook(notebook)}
+                onRename={handleRename}
+              />
               ))}
             </NotebookGrid>
           )}
         </section>
       </div>
-
-      {/* Dialogs */}
-     
     </main>
   );
 }

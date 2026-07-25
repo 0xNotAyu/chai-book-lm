@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+
+import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -16,46 +16,104 @@ import {
 } from "@/components/ui/dialog";
 
 interface RenameNotebookDialogProps {
-  currentName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRenameSuccess: () => void;
+  notebook: {
+    id: string;
+    title: string;
+    emoji: string;
+  } | null;
 }
 
 export function RenameNotebookDialog({
-  currentName,
+  notebook,
+  open,
+  onOpenChange,
+  onRenameSuccess,
 }: RenameNotebookDialogProps) {
-  const [name, setName] = useState(currentName);
+  const [name, setName] = useState(notebook?.title ?? "");
+  const [emoji, setEmoji] = useState(notebook?.emoji ?? "📙");
+  const [showPicker, setShowPicker] = useState(false);
 
-  function handleRename() {
-    console.log("Rename Notebook:", name);
+  async function handleRename() {
+  if (!notebook) return;
+
+  try {
+    const res = await fetch(`/api/notebooks/${notebook.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: name,
+        emoji,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to rename notebook");
+    }
+
+    onRenameSuccess();
+    onOpenChange(false);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+  function handleEmojiSelect(emojiData: EmojiClickData) {
+    setEmoji(emojiData.emoji);
+    setShowPicker(false);
   }
 
   return (
-    <Dialog>
-      <DialogTrigger render={
-        <Button variant="ghost" size="icon">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      }/>
+    <Dialog open={open} onOpenChange={onOpenChange}>
 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Rename Notebook</DialogTitle>
-          <DialogDescription>
-            Enter a new name for your notebook.
-          </DialogDescription>
+          <DialogTitle>Edit notebook</DialogTitle>
         </DialogHeader>
+
+        <div className="flex justify-center py-4">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPicker((prev) => !prev)}
+              className="flex h-36 w-36 items-center justify-center rounded-full bg-muted text-6xl transition hover:bg-muted/80"
+            >
+              {emoji}
+            </button>
+
+            {showPicker && (
+              <div className="absolute left-full top-0 ml-4 z-50">
+                <EmojiPicker
+                  theme={Theme.DARK}
+                  lazyLoadEmojis
+                  onEmojiClick={handleEmojiSelect}
+                />
+              </div>
+            )}
+          </div>
+        </div>
 
         <Input
           value={name}
-          onChange={(e) => setName(e.target.value)}
           placeholder="Notebook name"
+          onChange={(e) => setName(e.target.value)}
         />
 
         <DialogFooter>
+          <Button variant="outline">Cancel</Button>
+
           <Button
             onClick={handleRename}
-            disabled={!name.trim() || name === currentName}
+            disabled={
+            name.trim() === notebook?.title &&
+            emoji === notebook?.emoji
+          }
           >
-            Save Changes
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

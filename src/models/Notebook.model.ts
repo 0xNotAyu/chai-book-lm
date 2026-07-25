@@ -7,6 +7,7 @@ const MessageSchema = new Schema(
       enum: ["user", "assistant"],
       required: true,
     },
+
     content: {
       type: String,
       required: true,
@@ -25,7 +26,11 @@ const NotebookSchema = new Schema(
       required: true,
       trim: true,
     },
-
+    emoji: {
+      type: String,
+      default: "📙",
+      trim: true,
+    },
     description: {
       type: String,
       default: "",

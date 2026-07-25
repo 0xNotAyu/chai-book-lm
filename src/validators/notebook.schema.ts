@@ -12,6 +12,11 @@ export const createNotebookSchema = z.object({
     .trim()
     .max(500, "Description must be less than 500 characters")
     .optional(),
+
+  emoji: z
+    .string()
+    .trim()
+    .default("📙")
 });
 
 export const updateNotebookSchema = createNotebookSchema.partial();

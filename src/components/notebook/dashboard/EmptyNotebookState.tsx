@@ -2,7 +2,13 @@ import { BookOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export function EmptyNotebookState() {
+interface EmptyNotebookStateProps {
+  onCreate: () => void;
+}
+
+export function EmptyNotebookState({
+  onCreate,
+}: EmptyNotebookStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
       <div className="mb-4 rounded-full bg-muted p-4">
@@ -18,7 +24,7 @@ export function EmptyNotebookState() {
         explore your knowledge base.
       </p>
 
-      <Button className="mt-6">
+      <Button className="mt-6" onClick={onCreate}>
         Create Notebook
       </Button>
     </div>

@@ -11,6 +11,7 @@ export interface Notebook {
   _id?: Types.ObjectId;
 
   title: string;
+  emoji?: string;
   description?: string;
 
   conversations: ConversationMessage[];

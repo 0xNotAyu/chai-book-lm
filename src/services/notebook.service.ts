@@ -1,16 +1,18 @@
 import connectMongoDB from "@/lib/mongodb";
-import { Notebook } from "@/models/NoteBook.model";
+import { Notebook } from "@/models/Notebook.model"; 
 
 
 class NotebookService {
   async createNotebook(data: {
     title: string;
+    emoji?: string;
     description?: string;
   }) {
     await connectMongoDB();
 
     return await Notebook.create({
       title: data.title,
+      emoji: data.emoji ?? "❌",
       description: data.description ?? "",
     });
   }
@@ -31,6 +33,7 @@ class NotebookService {
     id: string,
     data: {
       title?: string;
+      emoji?: string;
       description?: string;
     }
   ) {
