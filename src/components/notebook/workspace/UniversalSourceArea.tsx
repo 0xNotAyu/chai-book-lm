@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +13,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { UploadCloud, Globe, Type, ArrowLeft, Play, Loader2 } from "lucide-react";
+import { UploadCloud, Globe, Type, ArrowLeft, Play } from "lucide-react";
+import type { Source } from "@/components/notebook/workspace/SourceList";
 
 type SourceStep = "select" | "website" | "youtube" | "text";
 
@@ -23,6 +23,14 @@ interface UniversalSourceAreaProps {
   notebookId: string;
   /** The element that opens the dialog. Pass whatever button/link markup you want — this component only owns the dialog itself. */
   trigger: React.ReactElement;
+  /**
+   * Called immediately once a source is submitted, before the network
+   * request finishes — lets the parent show a "processing" placeholder in
+   * the source list right away instead of blocking this dialog.
+   */
+  onOptimisticAdd?: (tempSource: Source) => void;
+  /** Called once the background add request settles (success or failure). */
+  onResolved?: () => void;
 }
 
 const STEP_META: Record<Exclude<SourceStep, "select">, { title: string; description: string }> = {
@@ -40,15 +48,22 @@ const STEP_META: Record<Exclude<SourceStep, "select">, { title: string; descript
   },
 };
 
-export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceAreaProps) {
-  const router = useRouter();
+function truncateTitle(input: string, max = 100) {
+  const trimmed = input.trim().replace(/\s+/g, " ");
+  return trimmed.length > max ? `${trimmed.slice(0, max - 3)}...` : trimmed;
+}
+
+export function UniversalSourceArea({
+  notebookId,
+  trigger,
+  onOptimisticAdd,
+  onResolved,
+}: UniversalSourceAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<SourceStep>("select");
   const [inputValue, setInputValue] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleFileUpload = () => {
     fileInputRef.current?.click();
@@ -72,70 +87,85 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
     return data;
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Fires the create request in the background and reconciles the source
+  // list once it settles — never awaited by the dialog itself.
+  function submitInBackground(body: FormData | Record<string, unknown>) {
+    postSource(body)
+      .catch((err) => {
+        console.error("Failed to add source:", err);
+      })
+      .finally(() => {
+        onResolved?.();
+      });
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = ""; // allow re-selecting the same file later
     if (!file) return;
 
-    setError(null);
-    setIsSubmitting(true);
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const EXTENSION_TO_SOURCE_TYPE: Record<string, Source["sourceType"]> = {
+      pdf: "pdf",
+      txt: "text",
+      vtt: "vtt",
+    };
+    const sourceType = EXTENSION_TO_SOURCE_TYPE[extension];
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      await postSource(formData);
-
-      router.refresh();
-      resetAndClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setIsSubmitting(false);
+    if (!sourceType) {
+      alert("Unsupported file type. Please upload a .pdf, .txt, or .vtt file.");
+      return;
     }
+
+    onOptimisticAdd?.({
+      _id: `temp-${crypto.randomUUID()}`,
+      title: truncateTitle(file.name),
+      fileName: file.name,
+      sourceType,
+      status: "processing",
+    });
+
+    resetAndClose();
+
+    const formData = new FormData();
+    formData.append("file", file);
+    submitInBackground(formData);
   };
 
   const resetAndClose = () => {
     setOpen(false);
     setStep("select");
     setInputValue("");
-    setError(null);
-    setIsSubmitting(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!inputValue.trim()) return;
 
-    setError(null);
-    setIsSubmitting(true);
+    const payload =
+      step === "text"
+        ? { sourceType: "text" as const, textContent: inputValue }
+        : { sourceType: step, url: inputValue };
 
-    try {
-      const payload =
-        step === "text"
-          ? { sourceType: "text", textContent: inputValue }
-          : { sourceType: step, url: inputValue };
+    onOptimisticAdd?.({
+      _id: `temp-${crypto.randomUUID()}`,
+      title: truncateTitle(step === "text" ? inputValue : inputValue),
+      url: step === "text" ? undefined : inputValue,
+      sourceType: step as Source["sourceType"],
+      status: "processing",
+    });
 
-      await postSource(payload);
-
-      router.refresh();
-      resetAndClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsSubmitting(false);
-    }
+    resetAndClose();
+    submitInBackground(payload);
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
-        if (isSubmitting) return; // don't allow closing mid-submit
         setOpen(isOpen);
         if (!isOpen) {
           setStep("select");
           setInputValue("");
-          setError(null);
         }
       }}
     >
@@ -159,45 +189,32 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
               </DialogDescription>
             </DialogHeader>
 
-            {isSubmitting ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-10">
-                <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
-                <p className="text-sm text-zinc-400">Uploading and indexing your file...</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <SourceOption
-                  icon={<UploadCloud className="w-5 h-5" />}
-                  label="Upload files"
-                  sublabel="PDF, TXT, VTT"
-                  onClick={handleFileUpload}
-                />
-                <SourceOption
-                  icon={<Globe className="w-5 h-5" />}
-                  label="Website"
-                  sublabel="Paste a URL"
-                  onClick={() => setStep("website")}
-                />
-                <SourceOption
-                  icon={<Play className="w-5 h-5 text-red-500" />}
-                  label="YouTube"
-                  sublabel="Video transcript"
-                  onClick={() => setStep("youtube")}
-                />
-                <SourceOption
-                  icon={<Type className="w-5 h-5" />}
-                  label="Copied text"
-                  sublabel="Paste raw text"
-                  onClick={() => setStep("text")}
-                />
-              </div>
-            )}
-
-            {error && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-                {error}
-              </p>
-            )}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <SourceOption
+                icon={<UploadCloud className="w-5 h-5" />}
+                label="Upload files"
+                sublabel="PDF, TXT, VTT"
+                onClick={handleFileUpload}
+              />
+              <SourceOption
+                icon={<Globe className="w-5 h-5" />}
+                label="Website"
+                sublabel="Paste a URL"
+                onClick={() => setStep("website")}
+              />
+              <SourceOption
+                icon={<Play className="w-5 h-5 text-red-500" />}
+                label="YouTube"
+                sublabel="Video transcript"
+                onClick={() => setStep("youtube")}
+              />
+              <SourceOption
+                icon={<Type className="w-5 h-5" />}
+                label="Copied text"
+                sublabel="Paste raw text"
+                onClick={() => setStep("text")}
+              />
+            </div>
           </>
         ) : (
           <>
@@ -206,10 +223,8 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
                 onClick={() => {
                   setStep("select");
                   setInputValue("");
-                  setError(null);
                 }}
-                disabled={isSubmitting}
-                className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 mb-1 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 mb-1 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back
@@ -226,7 +241,6 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
                   placeholder="Paste your text here..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  disabled={isSubmitting}
                   className="min-h-37.5 bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
                 />
               ) : (
@@ -235,34 +249,25 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
                   placeholder="https://..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  disabled={isSubmitting}
                   className="bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
                 />
               )}
             </div>
 
-            {error && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 mb-2">
-                {error}
-              </p>
-            )}
-
             <DialogFooter>
               <Button
                 variant="ghost"
                 onClick={resetAndClose}
-                disabled={isSubmitting}
                 className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={!inputValue.trim() || isSubmitting}
+                disabled={!inputValue.trim()}
                 className="rounded-full bg-white text-zinc-900 hover:bg-zinc-200 gap-1.5"
               >
-                {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {isSubmitting ? "Adding..." : "Submit"}
+                Add source
               </Button>
             </DialogFooter>
           </>

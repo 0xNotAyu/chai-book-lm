@@ -41,6 +41,16 @@ export const SourceSchema = new Schema(
       default: 0,
     },
     fileUrl: { type: String, default: null },
+
+    // Cloudinary public_id for uploaded PDFs, needed to delete the asset on
+    // source delete/re-upload. Not exposed to the client.
+    cloudinaryPublicId: { type: String, default: null, select: false },
+
+    // The raw extracted text (post extraction, pre-chunking) for this source.
+    // Kept so "Re-index" can re-chunk + re-embed without re-fetching the
+    // original file/URL/transcript. Excluded from normal list queries since
+    // it can be large — select it explicitly only when needed for re-index.
+    extractedText: { type: String, default: null, select: false },
   },
   {
     timestamps: true,
