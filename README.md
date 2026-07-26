@@ -5,6 +5,12 @@
 Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), generate AI-powered study materials, and share them with anyone.
 
 ---
+## 🚀 Live Deployed Link
+
+> https://chai-book-lm-alpha.vercel.app/
+
+---
+
 
 ## 🎥 Demo Video
 
@@ -12,7 +18,7 @@ Upload multiple knowledge sources, chat with your documents using Retrieval-Augm
 
 ---
 
-## 🚀 Overview
+##  Overview
 
 ChaiBookLM is a full-stack AI research assistant built as part of the **GenAI with JS 2026** assignment.
 
@@ -91,6 +97,7 @@ Vector Storage (Qdrant)
 
 Ready for AI Search
 ```
+
 Each source also maintains its own indexing state:
 
 * Uploading
@@ -525,22 +532,6 @@ The application can be deployed on:
 * Modern notebook experience
 * First-visit onboarding
 * Clear chat control
-
----
-
-# 📸 Screenshots
-
-Add screenshots here.
-
-* Dashboard
-* Notebook Workspace
-* Source Upload
-* AI Chat
-* Citation Viewer
-* Flashcards
-* Quiz
-* Report
-* Shared Artifact
 
 ---
 
