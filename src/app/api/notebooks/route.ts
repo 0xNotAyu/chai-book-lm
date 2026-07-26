@@ -24,7 +24,7 @@ export async function GET() {
     const notebooks = await notebookService.getAllNotebooks(userId);
     return NextResponse.json(notebooks);
   } catch (error) {
-    console.error(error);
+    console.error("GET /api/notebooks failed:", error);
     return NextResponse.json({ message: "Failed to fetch notebooks" }, { status: 500 });
   }
 }

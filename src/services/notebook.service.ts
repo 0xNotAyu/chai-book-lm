@@ -36,16 +36,17 @@ class NotebookService {
   }
 
 private async ensureDemoNotebooksFor(userId: string) {
-    // Atomically claim the "init" job for this user. If another request already
-    // claimed it (or finished it), this returns null and we skip cloning —
-    // this is what prevents duplicate notebooks on rapid refresh/race.
-    const claimed = await UserInit.findOneAndUpdate(
-      { userId },
-      { $setOnInsert: { userId, status: "pending" } },
-      { upsert: true, returnDocument: "before" }
-    );
-
-    if (claimed) return; // already existed (either pending from another request, or done)
+    // Try to atomically "claim" initialization for this user. If a doc
+    // already exists (from an earlier request, finished or in-flight), the
+    // unique index on userId makes this throw a duplicate-key error — that's
+    // our signal to skip cloning entirely.
+    try {
+      await UserInit.create({ userId, status: "pending" });
+    } catch (err: any) {
+      if (err?.code === 11000) return; // already claimed — someone else is/was doing this
+      console.error("UserInit claim failed:", err);
+      throw err;
+    }
 
     try {
       const templates = await Notebook.find({ isDemo: true, userId: null });
@@ -88,8 +89,9 @@ private async ensureDemoNotebooksFor(userId: string) {
 
       await UserInit.updateOne({ userId }, { status: "done" });
     } catch (error) {
-      // Roll back the lock on failure so a later request can retry cloning
-      // instead of permanently being stuck with zero notebooks.
+      console.error("Demo notebook cloning failed:", error);
+      // Roll back the lock so a later request can retry instead of the
+      // user being permanently stuck with zero notebooks.
       await UserInit.deleteOne({ userId });
       throw error;
     }
