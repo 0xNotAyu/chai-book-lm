@@ -28,40 +28,36 @@ function decodeEntities(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
+// Public, widely-known "innertube" web client key — used by youtube's own
+// player endpoint. No auth required, works from any IP including datacenters.
+const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+
 async function getCaptionTracks(videoId: string): Promise<CaptionTrack[]> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: {
-      // A real UA avoids YouTube serving a stripped-down page
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
+  const res = await fetch(
+    `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: "2.20240101.00.00",
+          },
+        },
+      }),
+    }
+  );
 
   if (!res.ok) {
-    throw new Error(`Failed to load YouTube page (status ${res.status}).`);
+    throw new Error(`Failed to load video data (status ${res.status}).`);
   }
 
-  const html = await res.text();
-
-const match = html.match(/"captions":\s*({[\s\S]*?"captionTracks"[\s\S]*?})\s*,\s*"videoDetails"/)
-  ?? html.match(/"captions":\s*({[\s\S]*?"captionTracks"[\s\S]*?}])\s*}/);
-
-  if (!match) {
-    throw new Error(
-      "This video has no captions/subtitles available (either disabled by the uploader or auto-captions weren't generated)."
-    );
-  }
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(match[1]);
-  } catch {
-    throw new Error("Could not parse caption metadata for this video.");
-  }
+  const data = await res.json();
 
   const tracks: CaptionTrack[] =
-    parsed?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+    data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
 
   if (!tracks.length) {
     throw new Error(
