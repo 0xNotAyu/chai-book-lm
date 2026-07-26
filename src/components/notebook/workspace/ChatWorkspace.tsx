@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Loader2, ZoomIn, ZoomOut, Maximize2, Minimize2 } from "lucide-react";
+
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
@@ -12,8 +13,14 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Check, Copy as CopyIcon, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { createPortal } from "react-dom";
-import { SourceContent, type CitedSource } from "@/components/notebook/workspace/SourceViewPanel";
+import dynamic from "next/dynamic";
+import type { CitedSource } from "@/components/notebook/workspace/SourceViewPanel";
 import { X } from "lucide-react";
+
+const SourceContent = dynamic(
+  () => import("@/components/notebook/workspace/SourceViewPanel").then((m) => m.SourceContent),
+  { ssr: false }
+);
 
 interface ChatWorkspaceProps {
   notebookId: string;
