@@ -28,63 +28,92 @@ function decodeEntities(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
-// Public, widely-known "innertube" web client key — used by youtube's own
-// player endpoint. No auth required, works from any IP including datacenters.
-const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+interface ClientConfig {
+  name: string;
+  apiKey: string;
+  context: Record<string, unknown>;
+}
+
+const CLIENT_CONFIGS: ClientConfig[] = [
+  {
+    name: "ANDROID",
+    apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+    context: {
+      client: {
+        clientName: "ANDROID",
+        clientVersion: "19.09.37",
+        androidSdkVersion: 30,
+      },
+    },
+  },
+  {
+    name: "IOS",
+    apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
+    context: {
+      client: {
+        clientName: "IOS",
+        clientVersion: "19.09.3",
+        deviceModel: "iPhone14,3",
+      },
+    },
+  },
+  {
+    name: "WEB",
+    apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+    context: {
+      client: { clientName: "WEB", clientVersion: "2.20240401.01.00" },
+    },
+  },
+];
 
 async function getCaptionTracks(videoId: string): Promise<CaptionTrack[]> {
-  const res = await fetch(
-    `https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        Origin: "https://www.youtube.com",
-        Referer: "https://www.youtube.com/",
-      },
-      body: JSON.stringify({
-        videoId,
-        context: {
-          client: {
-            clientName: "WEB",
-            clientVersion: "2.20240401.01.00",
-            hl: "en",
-            gl: "US",
+  let lastError = "";
+
+  for (const config of CLIENT_CONFIGS) {
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/youtubei/v1/player?key=${config.apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent":
+              config.name === "ANDROID"
+                ? "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip"
+                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
           },
-        },
-      }),
+          body: JSON.stringify({
+            videoId,
+            context: config.context,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        lastError = `${config.name}: HTTP ${res.status}`;
+        continue;
+      }
+
+      const data = await res.json();
+      const status = data?.playabilityStatus?.status;
+      const tracks: CaptionTrack[] =
+        data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+
+      console.log(`[youtube debug] client=${config.name} status=${status} tracks=${tracks.length}`);
+
+      if (tracks.length > 0) {
+        return tracks;
+      }
+
+      lastError = `${config.name}: status=${status}, no caption tracks`;
+    } catch (err) {
+      lastError = `${config.name}: ${err instanceof Error ? err.message : "unknown error"}`;
     }
+  }
+
+  throw new Error(
+    `This video has no captions/subtitles available, or YouTube is blocking automated access from this server (last attempt: ${lastError}).`
   );
-
-  if (!res.ok) {
-    throw new Error(`Failed to load video data (status ${res.status}).`);
-  }
-
-  const data = await res.json();
-
-  // TEMP DEBUG — remove once working. Shows us exactly what YouTube sent
-  // back so we know if it's "no captions" vs "blocked" vs "shape changed".
-  console.log("[youtube debug] playabilityStatus:", data?.playabilityStatus?.status);
-  console.log("[youtube debug] has captions key:", !!data?.captions);
-  console.log("[youtube debug] raw captions:", JSON.stringify(data?.captions)?.slice(0, 500));
-
-  const tracks: CaptionTrack[] =
-    data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
-
-  if (!tracks.length) {
-    const status = data?.playabilityStatus?.status;
-    if (status && status !== "OK") {
-      throw new Error(`YouTube blocked this request (status: ${status}). This may need a different extraction approach for hosted environments.`);
-    }
-    throw new Error(
-      "This video has no captions/subtitles available (either disabled by the uploader or auto-captions weren't generated)."
-    );
-  }
-
-  return tracks;
 }
 
 function pickBestTrack(tracks: CaptionTrack[]): CaptionTrack {
