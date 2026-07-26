@@ -1,8 +1,14 @@
 # 🍵 ChaiBookLM
 
- **An AI-powered Research Assistant inspired by Google NotebookLM.**
+**An AI-powered Research Assistant inspired by Google NotebookLM.**
 
- Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), generate AI-powered study materials, and share them with anyone.
+Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), generate AI-powered study materials, and share them with anyone.
+
+---
+
+## 🎥 Demo Video
+
+> 📺 [**Watch the demo video here**](PASTE_DEMO_VIDEO_LINK_HERE)
 
 ---
 
@@ -16,19 +22,30 @@ Unlike a traditional chatbot, every response is backed by retrieved context from
 
 Beyond conversational search, ChaiBookLM can also generate AI-powered learning artifacts such as reports, flashcards, and quizzes which can be shared publicly.
 
+Every first-time visitor automatically gets a personal set of demo notebooks (PDF, VTT, Website, YouTube) cloned for them — so the app can be tried instantly with zero setup, with no login required.
+
 ---
 
 # ✨ Features
 
 ## 📙 Notebook Management
 
-* Create notebooks
-* Rename notebooks
-* Delete notebooks
+* Multiple notebooks per (anonymous) user
+* Create, rename, delete notebooks
 * Notebook isolation
 * Emoji support
 * Responsive dashboard
 * Loading & empty states
+* First-visit onboarding dialog introducing the pre-loaded demo notebooks
+
+---
+
+## 👤 Per-Visitor Demo Notebooks
+
+* No login/signup — each visitor is identified by a secure, httpOnly cookie
+* On first visit, 4 demo notebooks (PDF / VTT / Website / YouTube) are automatically cloned into that visitor's own private workspace
+* Cloning is done atomically (via a dedicated lock collection) so concurrent requests or rapid refreshes can never create duplicate notebooks
+* Each visitor's notebooks, sources, and chat history are fully isolated from every other visitor
 
 ---
 
@@ -44,12 +61,14 @@ Supports multiple source types:
 
 Each notebook can contain multiple knowledge sources.
 
+> **Note:** YouTube transcript fetching can occasionally be blocked by YouTube for requests coming from cloud/server IPs. When this happens, the source fails with a clear, actionable message instead of a generic error, pointing users to the demo notebooks or VTT upload as a reliable alternative.
+
 ---
 
 ## ⚙️ Source Processing Pipeline
 
 Every uploaded source goes through the following pipeline:
-
+```
 Upload
 
 ↓
@@ -71,13 +90,15 @@ Vector Storage (Qdrant)
 ↓
 
 Ready for AI Search
-
+```
 Each source also maintains its own indexing state:
 
 * Uploading
 * Indexing
 * Ready
-* Failed
+* Failed (with a specific, human-readable error message)
+
+Sources can be deleted or re-indexed at any time without needing to re-upload — re-indexing reuses the originally extracted text to rebuild chunks/embeddings.
 
 ---
 
@@ -85,11 +106,11 @@ Each source also maintains its own indexing state:
 
 When the user asks a question:
 
-1. User query is embedded
-2. Qdrant performs semantic vector search
-3. Most relevant chunks are retrieved
+1. The query is rewritten into multiple variants (typo-fixed rewrite, step-back question, HyDE hypothetical answer, and sub-questions)
+2. Each variant is embedded and searched against Qdrant in parallel, scoped strictly to that notebook
+3. Results are fused using Reciprocal Rank Fusion (RRF) for stronger retrieval quality
 4. Retrieved context is sent to the LLM
-5. AI generates a grounded response
+5. AI generates a grounded, streamed response
 6. Citations are attached to every answer
 
 This minimizes hallucinations by forcing the model to answer using only retrieved context.
@@ -100,10 +121,12 @@ This minimizes hallucinations by forcing the model to answer using only retrieve
 
 * Natural language conversations
 * Streaming responses
-* Markdown formatting
-* Context-aware retrieval
-* Notebook-specific memory
+* Markdown formatting (including code blocks with copy/syntax highlighting)
+* Context-aware, multi-query retrieval
+* Notebook-specific memory (persisted conversation history)
 * Grounded answers only
+* **Clear Chat** — resets the conversation for a notebook without touching any of its sources
+* **AI-Suggested Questions** — when a notebook has no conversation yet, the app generates a handful of relevant starter questions from the notebook's own content, so users always know what to ask
 
 ---
 
@@ -115,11 +138,11 @@ Users can inspect exactly where an answer came from.
 
 Supported citation viewers:
 
-* PDF
-* Website
-* Plain Text
-* YouTube Timestamp
-* Transcript Highlight
+* PDF (jumps to and renders the relevant page)
+* Website (opens/previews the original page)
+* Plain Text (highlights the relevant excerpt)
+* YouTube (jumps to the referenced timestamp)
+* VTT / Transcript (auto-scrolls to and highlights the cited transcript line, synced to its timestamp)
 
 This ensures complete transparency and source attribution.
 
@@ -181,7 +204,7 @@ This allows users to share generated study material while keeping their notebook
 # 🏗 Architecture
 
 ```
-                User
+                User (identified via anonymous cookie)
                   │
                   ▼
             Next.js Frontend
@@ -230,13 +253,20 @@ Store in Qdrant
 User Question
       │
       ▼
-Similarity Search
+Multi-Query Rewriting
+(rewrite / step-back / HyDE / sub-queries)
+      │
+      ▼
+Parallel Similarity Search
+      │
+      ▼
+Reciprocal Rank Fusion
       │
       ▼
 Retrieve Context
       │
       ▼
-OpenAI
+OpenAI (Streaming)
       │
       ▼
 Grounded Response
@@ -264,6 +294,7 @@ Return Citations
 
 * Next.js Route Handlers
 * TypeScript
+* Cookie-based anonymous user identification (Next.js Middleware)
 
 ---
 
@@ -285,6 +316,7 @@ Return Citations
 * OpenAI API
 * Embeddings
 * Streaming Chat Completion
+* Multi-query retrieval (rewrite, step-back, HyDE, RRF fusion)
 
 ---
 
@@ -329,6 +361,8 @@ src
 │
 ├── lib
 │
+├── middleware.ts
+│
 └── types
 ```
 
@@ -339,13 +373,14 @@ src
 Notebook APIs
 
 * Create Notebook
-* List Notebooks
+* List Notebooks (auto-clones demo notebooks on a visitor's first request)
 * Rename Notebook
 * Delete Notebook
 
 Source APIs
 
 * Upload Source
+* Fetch Source Content (for transcript/VTT viewing)
 * Delete Source
 * Re-index Source
 
@@ -353,6 +388,8 @@ Chat APIs
 
 * Streaming Chat
 * Conversation History
+* Clear Conversation
+* AI-Suggested Questions
 
 Artifact APIs
 
@@ -390,18 +427,16 @@ npm run dev
 Create a `.env.local`
 
 ```env
-MONGODB_URI=
+MONGO_URI=
 
 OPENAI_API_KEY=
+OPENAI_BASE_URL=
 
-QDRANT_URL=
-
+QDRANT_CLUSTER_ENDPOINT=
 QDRANT_API_KEY=
 
 CLOUDINARY_CLOUD_NAME=
-
 CLOUDINARY_API_KEY=
-
 CLOUDINARY_API_SECRET=
 ```
 
@@ -427,6 +462,7 @@ The application can be deployed on:
 * Rename
 * Delete
 * Isolation
+* Per-visitor demo notebooks (no login required)
 
 ---
 
@@ -437,6 +473,7 @@ The application can be deployed on:
 * Website
 * YouTube
 * VTT
+* Clear, actionable failure messages (e.g. YouTube blocking)
 
 ---
 
@@ -453,16 +490,17 @@ The application can be deployed on:
 ## ✅ AI Responses
 
 * Streaming
-* RAG
+* Multi-query RAG (rewrite / step-back / HyDE / RRF)
 * Prompt Engineering
 * Minimal Hallucination
+* AI-generated suggested starter questions
 
 ---
 
 ## ✅ Citation System
 
 * Every response contains citations
-* Source inspection
+* Source inspection, including timestamp-synced VTT/YouTube viewing
 * Metadata preserved
 
 ---
@@ -475,6 +513,7 @@ The application can be deployed on:
 * Service layer
 * Validation
 * Error handling
+* Atomic, race-condition-safe per-user demo cloning
 
 ---
 
@@ -484,6 +523,8 @@ The application can be deployed on:
 * Loading states
 * Empty states
 * Modern notebook experience
+* First-visit onboarding
+* Clear chat control
 
 ---
 
@@ -505,8 +546,7 @@ Add screenshots here.
 
 # 🔮 Future Improvements
 
-* Authentication
-* Anonymous users
+* Full authentication (accounts, not just anonymous cookies)
 * Collaborative notebooks
 * Podcast generation
 * Learning roadmaps
@@ -521,10 +561,13 @@ Add screenshots here.
 # 💡 Engineering Decisions
 
 * Every notebook has its own isolated knowledge base.
-* Vector search is performed using Qdrant.
+* Vector search is performed using Qdrant, scoped per-notebook.
 * AI responses are always grounded using retrieved context.
+* Retrieval uses multi-query expansion (rewrite, step-back, HyDE) fused via RRF for higher recall/precision.
 * Artifacts are generated independently from conversations.
 * Shared artifacts are public while notebooks remain private.
+* Anonymous per-visitor identity (via cookie) lets everyone get their own isolated demo workspace without requiring signup.
+* Demo notebook cloning uses an atomic lock to guarantee exactly-once initialization, even under concurrent/rapid requests.
 * The application prioritizes retrieval quality over unrestricted generation to reduce hallucinations.
 
 ---

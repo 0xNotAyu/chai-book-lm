@@ -42,7 +42,7 @@ private async ensureDemoNotebooksFor(userId: string) {
     const claimed = await UserInit.findOneAndUpdate(
       { userId },
       { $setOnInsert: { userId, status: "pending" } },
-      { upsert: true, new: false }
+      { upsert: true, returnDocument: "before" }
     );
 
     if (claimed) return; // already existed (either pending from another request, or done)
