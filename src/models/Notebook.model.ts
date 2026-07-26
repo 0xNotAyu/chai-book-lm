@@ -1,23 +1,30 @@
 import { Schema, model, models } from "mongoose";
 
-const MessageSchema = new Schema(
+const CitationSchema = new Schema(
   {
-    role: {
-      type: String,
-      enum: ["user", "assistant"],
-      required: true,
-    },
-
-    content: {
-      type: String,
-      required: true,
-    },
+    index: Number,
+    sourceId: String,
+    sourceType: String,
+    title: String,
+    snippet: String,
+    url: { type: String, default: null },
+    page: { type: Number, default: null },
+    startSeconds: { type: Number, default: null },
+    endSeconds: { type: Number, default: null },
   },
-  {
-    _id: false,
-    timestamps: true,
-  }
+  { _id: false }
 );
+
+const MessageSchema = new Schema(
+    {
+    role: { type: String, enum: ["user", "assistant"], required: true },
+    content: { type: String, required: true },
+    citations: { type: [CitationSchema], default: undefined },
+  },
+  { _id: false, timestamps: true }
+);
+
+
 
 const NotebookSchema = new Schema(
   {

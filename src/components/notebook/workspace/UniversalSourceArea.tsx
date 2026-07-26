@@ -22,7 +22,7 @@ interface UniversalSourceAreaProps {
   /** Notebook this source will be attached to. */
   notebookId: string;
   /** The element that opens the dialog. Pass whatever button/link markup you want — this component only owns the dialog itself. */
-  trigger: React.ReactNode;
+  trigger: React.ReactElement;
 }
 
 const STEP_META: Record<Exclude<SourceStep, "select">, { title: string; description: string }> = {
@@ -147,7 +147,7 @@ export function UniversalSourceArea({ notebookId, trigger }: UniversalSourceArea
         onChange={handleFileChange}
       />
 
-      <DialogTrigger>{trigger}</DialogTrigger>
+      <DialogTrigger render={trigger} />
 
       <DialogContent className="bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-3xl sm:max-w-md">
         {step === "select" ? (

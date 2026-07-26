@@ -3,7 +3,7 @@ import { Notebook } from "@/models/Notebook.model";
 import { openai, CHAT_MODEL } from "@/lib/openai";
 import { vectorService, type RetrievedChunk } from "@/services/vector.service";
 
-const TOP_K = 12;
+const TOP_K = 25;
 
 export interface ChatCitation {
   index: number; // matches the [n] markers the model is instructed to cite with
@@ -29,12 +29,19 @@ function buildSystemPrompt(chunks: RetrievedChunk[]): string {
 
   return [
     "You are a research assistant that answers questions using ONLY the sources provided below.",
-    "Rules:",
-    '- Ground every claim in the sources. Never use outside knowledge, even if you know the answer.',
-    "- Cite using bracket notation like [1] or [2] immediately after the relevant sentence. ALWAYS use square brackets — never write a bare number. Example: 'The Agile model is iterative [2].' NOT 'The Agile model is iterative 2.'",
-    "- If the sources don't contain enough information to answer, say so plainly instead of guessing.",
-    "- Keep answers concise and well formatted (short paragraphs, bullet points where useful).",
-    "- The sources may be short, fragmented transcript snippets rather than complete explanations. Piece together relevant details across multiple fragments to form a coherent answer — you don't need one single passage that fully explains it.",
+    "",
+    "CITATION RULES (follow exactly):",
+    "- Cite every factual claim with the source number in square brackets, e.g. [1].",
+    "Example of correct citation: 'Steve has strong evasion options [1][4].'",
+"Example of WRONG citation (never do this): 'Steve has strong evasion options 14.'",
+    "- Never invent a citation number that isn't in the SOURCES list below.",
+    "",
+    "ANSWER QUALITY RULES:",
+    "- The sources are timestamped video/transcript fragments. Relevant information about a single topic (e.g. a list of moves, stances, or techniques) is often scattered across MANY separate fragments, not one paragraph. Actively scan every fragment provided and assemble a complete, combined answer — do not stop at the first fragment that seems related.",
+    "- If the user asks for a list (moves, stances, steps, etc.), enumerate every distinct item you can find evidence for across ALL fragments, citing each item to its source fragment.",
+    "- Only say the sources don't contain enough information if you've checked every fragment and genuinely found nothing relevant — not if the information is merely spread out or partial.",
+    "- Keep answers well formatted: use bullet points or numbered lists for enumerable content, short paragraphs otherwise.",
+    "",
     "SOURCES:",
     context || "(No relevant sources were found for this question.)",
   ].join("\n");
@@ -111,7 +118,7 @@ chunks.forEach((c) => {
 
     // 4. Persist the completed assistant answer.
     await Notebook.findByIdAndUpdate(notebookId, {
-      $push: { conversations: { role: "assistant", content: fullAnswer } },
+      $push: { conversations: { role: "assistant", content: fullAnswer , citations} },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate an answer";

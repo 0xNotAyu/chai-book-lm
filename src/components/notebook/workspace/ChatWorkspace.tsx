@@ -8,6 +8,9 @@ import { SourceViewerPanel, type CitedSource } from "@/components/notebook/works
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, RefreshCw, MoreHorizontal } from "lucide-react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Check, Copy as CopyIcon } from "lucide-react";
 
 interface ChatWorkspaceProps {
   notebookId: string;
@@ -52,7 +55,7 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
         const data = await res.json();
         if (!cancelled) {
           setMessages(
-            data.map((m: any) => ({ role: m.role, content: m.content }))
+            data.map((m: any) => ({ role: m.role, content: m.content ,citations: m.citations  }))
           );
         }
       } catch (err) {
@@ -243,17 +246,57 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
     </>
   );
 }
-
-
-
 // Converts [n] markers into markdown link syntax so ReactMarkdown parses
 // them as nodes we can intercept and render as citation chips.
 function citationsToMarkdownLinks(content: string, citations?: Citation[]): string {
   if (!citations || citations.length === 0) return content;
-  return content.replace(/\[(\d+)\]/g, (match, num) => {
-    const exists = citations.some((c) => c.index === Number(num));
-    return exists ? `[${num}](citation:${num})` : match;
-  });
+
+  const parts = content.split(/(```[\s\S]*?```)/g); // keep fenced blocks untouched
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // odd index = inside a ``` fence, skip
+      return part.replace(/\[(\d+)\]/g, (match, num) => {
+        const exists = citations.some((c) => c.index === Number(num));
+        return exists ? `[${num}](#citation-${num})` : match;
+      });
+    })
+    .join("");
+}
+function splitCompleteAndPending(content: string) {
+  const fenceCount = (content.match(/```/g) || []).length;
+  if (fenceCount % 2 === 0) return { complete: content, pending: "" };
+  const lastFenceIdx = content.lastIndexOf("```");
+  return { complete: content.slice(0, lastFenceIdx), pending: content.slice(lastFenceIdx) };
+}
+
+function CodeBlock({ language, value }: { language: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="relative my-3 rounded-xl overflow-hidden border border-zinc-800">
+      <div className="flex items-center justify-between px-4 py-1.5 bg-zinc-900 text-xs text-zinc-400">
+        <span>{language || "text"}</span>
+        <button onClick={handleCopy} className="flex items-center gap-1 hover:text-zinc-200">
+          {copied ? <Check className="w-3.5 h-3.5" /> : <CopyIcon className="w-3.5 h-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={language || "text"}
+        style={oneDark}
+        
+        customStyle={{ margin: 0, padding: "1rem", }}
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
 }
 
 function MessageBubble({
@@ -278,7 +321,7 @@ function MessageBubble({
       </div>
     );
   }
-
+const { complete, pending } = splitCompleteAndPending(message.content);
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] w-full">
@@ -292,38 +335,55 @@ function MessageBubble({
               li: ({ children }) => <li className="text-zinc-200">{children}</li>,
               h1: ({ children }) => <h1 className="text-lg font-semibold text-zinc-100 mt-4 mb-2 first:mt-0">{children}</h1>,
               h2: ({ children }) => <h2 className="text-base font-semibold text-zinc-100 mt-4 mb-2 first:mt-0">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-sm font-semibold text-zinc-100 mt-3 mb-1.5 first:mt-0">{children}</h3>,
+              h3: ({ children }) => <h3 className="text-sm font-semibold text-zinc-100 mt-3 mb-1.5 first:mt-0">{children}</h3>,  
               strong: ({ children }) => <strong className="font-semibold text-zinc-100">{children}</strong>,
-              code: ({ children }) => (
-                <code className="bg-zinc-800 text-zinc-200 rounded px-1.5 py-0.5 text-xs font-mono">
-                  {children}
-                </code>
-              ),
+              code: ({ className, children, ...props }: any) => {
+  const match = /language-(\w+)/.exec(className || "");
+  const value = String(children).replace(/\n$/, "");
+  const isInline = !match && !value.includes("\n");
+
+  if (isInline) {
+    return (
+      <code className="bg-zinc-800 text-zinc-200 rounded px-1.5 py-0.5 text-xs font-mono">
+        {children}
+      </code>
+    );
+  }
+
+  return <CodeBlock language={match?.[1] || ""} value={value} />;
+},
+pre: ({ children }) => <>{children}</>,
+             
               a: ({ href, children }) => {
-                if (href?.startsWith("citation:")) {
-                  const idx = Number(href.replace("citation:", ""));
-                  const citation = message.citations?.find((c) => c.index === idx);
-                  if (citation) {
-                    return (
-                      <button
-                        onClick={() => onCitationClick(citation)}
-                        className="inline-flex items-center justify-center mx-0.5 h-4 min-w-4 px-1 rounded-full bg-zinc-700 text-zinc-200 text-[10px] font-medium align-super hover:bg-zinc-600 transition-colors"
-                      >
-                        {idx}
-                      </button>
-                    );
-                  }
-                }
-                return (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">
-                    {children}
-                  </a>
-                );
-              },
+  if (href?.startsWith("#citation-")) {
+    const idx = Number(href.replace("#citation-", ""));
+    const citation = message.citations?.find((c) => c.index === idx);
+    if (citation) {
+      return (
+        <button
+          onClick={() => onCitationClick(citation)}
+          className="inline-flex items-center justify-center mx-0.5 h-4 min-w-4 px-1 rounded-full bg-zinc-700 text-zinc-200 text-[10px] font-medium align-super hover:bg-zinc-600 transition-colors"
+        >
+          {idx}
+        </button>
+      );
+    }
+  }
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">
+      {children}
+    </a>
+  );
+},
             }}
+            
           >
-            {citationsToMarkdownLinks(message.content, message.citations)}
+            {citationsToMarkdownLinks(complete, message.citations)}
+            
           </ReactMarkdown>
+          {pending && (
+        <pre className="text-zinc-400 text-xs whitespace-pre-wrap font-mono">{pending}</pre>
+      )}
         </div>
 
         {/* Placeholder action row — wire up real behavior later */}
