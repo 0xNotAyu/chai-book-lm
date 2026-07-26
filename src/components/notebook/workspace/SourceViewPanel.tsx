@@ -1,104 +1,86 @@
-// src/components/notebook/workspace/SourceViewerPanel.tsx
 "use client";
 
-import { X, FileSearch } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, useState } from "react";
+import { ZoomIn, ZoomOut } from "lucide-react";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 
-/**
- * Types you'll likely plug in once citations exist.
- * Adjust field names to match your actual RAG/source schema.
- */
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 export type CitedSource = {
   sourceId: string;
   sourceType: "pdf" | "text" | "website" | "youtube" | "vtt";
   title: string;
-  /** The exact chunk/snippet the answer was grounded in */
   snippet: string;
-  /** PDF: page number */
   page?: number;
-  /** YouTube: seconds to seek to */
   timestampSeconds?: number;
-  /** Website: URL to open/preview */
   url?: string;
+  fileUrl?: string;
 };
 
-interface SourceViewerPanelProps {
-  /** Panel only renders when this is non-null. */
-  selectedSource: CitedSource | null;
-  /** Called when the user clicks the X to dismiss the panel */
-  onClose: () => void;
+function getYoutubeEmbedUrl(url: string, startSeconds?: number) {
+  const match = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
+  const videoId = match?.[1];
+  if (!videoId) return null;
+  return `https://www.youtube.com/embed/${videoId}?start=${startSeconds ? Math.floor(startSeconds) : 0}&autoplay=1`;
 }
 
-/**
- * Appears only when a citation is clicked in chat. No collapse/expand state,
- * no floating card styling — just a plain panel that shows up and can be
- * dismissed with the X. Wire it up like:
- *
- *   const [selectedSource, setSelectedSource] = useState<CitedSource | null>(null);
- *   <SourceViewerPanel selectedSource={selectedSource} onClose={() => setSelectedSource(null)} />
- *   // on citation click: setSelectedSource(citation)
- */
-export function SourceViewerPanel({ selectedSource, onClose }: SourceViewerPanelProps) {
-  if (!selectedSource) return null;
+export function SourceContent({ source, scale = 1 }: { source: CitedSource; scale?: number }) {
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    setNumPages(null);
+  }, [source.sourceId]);
+
+  useEffect(() => {
+    if (!source.page || !numPages) return;
+    pageRefs.current[source.page]?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" });
+  }, [numPages, source.page, source.sourceId]);
+
+  const { sourceType, snippet, timestampSeconds, url, fileUrl } = source;
+
+  if (sourceType === "pdf" && fileUrl) {
+    return (
+      <div className="flex-1 min-h-0 overflow-auto bg-zinc-900">
+        <Document
+          file={fileUrl}
+          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+          loading={<p className="text-zinc-500 text-sm mt-16 text-center">Loading PDF...</p>}
+          error={<p className="text-red-400 text-sm mt-16 text-center">Failed to load PDF.</p>}
+        >
+          {Array.from({ length: numPages ?? 0 }, (_, i) => i + 1).map((n) => (
+            <div key={n} ref={(el) => { pageRefs.current[n] = el; }} className="flex justify-center py-2">
+              <Page pageNumber={n} scale={scale} renderAnnotationLayer={false} renderTextLayer={false} />
+            </div>
+          ))}
+        </Document>
+      </div>
+    );
+  }
+
+  if (sourceType === "youtube" && url && getYoutubeEmbedUrl(url, timestampSeconds)) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-black">
+        <iframe key={url + timestampSeconds} src={getYoutubeEmbedUrl(url, timestampSeconds)!} className="w-full max-w-5xl aspect-video" allow="autoplay; encrypted-media" allowFullScreen />
+      </div>
+    );
+  }
+
+  if (sourceType === "website" && url) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-center rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-200 hover:bg-zinc-900">
+          Open Original Site ↗
+        </a>
+      </div>
+    );
+  }
 
   return (
-    <aside className="w-[380px] shrink-0 border-l border-zinc-800 flex flex-col overflow-hidden">
-      <div className="h-14 px-5 flex items-center justify-between shrink-0 border-b border-zinc-800">
-        <h2 className="font-medium text-base text-zinc-200">Source</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          aria-label="Close source viewer"
-          onClick={onClose}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">
-              {selectedSource.sourceType}
-            </p>
-            <h3 className="text-sm font-medium text-zinc-100">
-              {selectedSource.title}
-            </h3>
-            {selectedSource.page != null && (
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Page {selectedSource.page}
-              </p>
-            )}
-            {selectedSource.timestampSeconds != null && (
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Starts at {formatTimestamp(selectedSource.timestampSeconds)}
-              </p>
-            )}
-          </div>
-
-          {/*
-            Render logic per source type goes here once wired up:
-            - pdf: embed viewer, scroll/highlight to `page`
-            - youtube: iframe with `?start=${timestampSeconds}`
-            - website: iframe preview or fetched readable content
-            - text / vtt: render full text with `snippet` highlighted
-          */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-              {selectedSource.snippet}
-            </p>
-          </div>
-        </div>
-      </div>
-    </aside>
+    <div className="flex-1 overflow-y-auto p-8 max-w-2xl mx-auto">
+      <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{snippet}</p>
+    </div>
   );
-}
-
-function formatTimestamp(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.floor(totalSeconds % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${minutes}:${seconds}`;
 }

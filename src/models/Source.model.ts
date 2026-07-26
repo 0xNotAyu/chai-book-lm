@@ -40,6 +40,7 @@ export const SourceSchema = new Schema(
       type: Number,
       default: 0,
     },
+    fileUrl: { type: String, default: null },
   },
   {
     timestamps: true,

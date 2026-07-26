@@ -11,6 +11,7 @@ const CitationSchema = new Schema(
     page: { type: Number, default: null },
     startSeconds: { type: Number, default: null },
     endSeconds: { type: Number, default: null },
+    fileUrl: { type: String, default: null }, // ← was missing
   },
   { _id: false }
 );

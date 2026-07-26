@@ -1,20 +1,13 @@
 import { YoutubeTranscript } from "youtube-transcript";
-
-/**
- * Extracts a transcript from a YouTube video with [[T:start:end]] markers
- * (seconds) before each segment, so the chunker can tag every chunk with a
- * timestamp range for "jump to this moment" citations.
- *
- * Note: `youtube-transcript` reports `offset`/`duration` in seconds.
- */
 export async function extractYoutube(url: string): Promise<string> {
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(url);
 
     const fullText = transcript
       .map((item) => {
-        const start = item.offset;
-        const end = item.offset + item.duration;
+        // youtube-transcript returns offset/duration in milliseconds — convert to seconds.
+        const start = item.offset / 1000;
+        const end = (item.offset + item.duration) / 1000;
         const cleanText = item.text.replace(/\s+/g, " ").trim();
         return `[[T:${start.toFixed(2)}:${end.toFixed(2)}]] ${cleanText}`;
       })

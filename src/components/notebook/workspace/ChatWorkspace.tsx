@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, ZoomIn, ZoomOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SourceViewerPanel, type CitedSource } from "@/components/notebook/workspace/SourceViewPanel";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, RefreshCw, MoreHorizontal } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Check, Copy as CopyIcon } from "lucide-react";
+import { Check, Copy as CopyIcon , ChevronLeft, ChevronRight} from "lucide-react";
+
+import { createPortal } from "react-dom";
+import { SourceContent, type CitedSource } from "@/components/notebook/workspace/SourceViewPanel";
+import { X } from "lucide-react";
 
 interface ChatWorkspaceProps {
   notebookId: string;
@@ -28,6 +31,7 @@ interface Citation {
   page: number | null;
   startSeconds: number | null;
   endSeconds: number | null;
+  fileUrl: string | null;
 }
 
 interface ChatMessage {
@@ -43,6 +47,68 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [pdfScale, setPdfScale] = useState(1);
+
+  
+
+  const chatPanel = (
+  <>
+    <div className="flex-1 flex flex-col overflow-y-auto px-6 min-h-0">
+      {!hasSources ? (
+        <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center">
+          <p className="text-sm text-zinc-500">Add a source from the panel on the left to start chatting.</p>
+        </div>
+      ) : isLoadingHistory ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
+        </div>
+      ) : messages.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center">
+          <p className="text-sm text-zinc-500">Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.</p>
+        </div>
+      ) : (
+        <div className="w-full flex-1 flex flex-col gap-6 py-6">
+          {messages.map((msg, i) => (
+            <MessageBubble key={i} message={msg} onCitationClick={openCitation} />
+          ))}
+          {isStreaming && messages[messages.length - 1]?.content === "" && (
+            <div className="flex items-center gap-2 text-zinc-500 text-sm">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Thinking...
+            </div>
+          )}
+          <div ref={scrollRef} />
+        </div>
+      )}
+    </div>
+
+    <div className="px-6 pb-6 pt-2 shrink-0">
+      <div className="relative h-14 rounded-full border border-zinc-800 bg-zinc-900 flex items-center pl-5 pr-2 gap-3">
+        <Input
+          type="text"
+          placeholder="Start typing..."
+          value={input}
+          disabled={!hasSources || isStreaming}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          className="flex-1 bg-transparent border-0 shadow-none text-sm placeholder:text-zinc-600 focus-visible:ring-0 px-0 h-full"
+        />
+        <span className="text-xs text-zinc-600 shrink-0">{sourceCount} sources</span>
+        <Button
+          size="icon"
+          onClick={handleSend}
+          disabled={!hasSources || !input.trim() || isStreaming}
+          className="rounded-full h-10 w-10 shrink-0 bg-zinc-700 text-white hover:bg-zinc-600 disabled:opacity-100 disabled:bg-zinc-800"
+        >
+          {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+        </Button>
+      </div>
+    </div>
+  </>
+);
+
+
 
   // Load persisted conversation history on mount.
   useEffect(() => {
@@ -164,87 +230,79 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
       page: c.page ?? undefined,
       timestampSeconds: c.startSeconds ?? undefined,
       url: c.url ?? undefined,
+      fileUrl: c.fileUrl ?? undefined,
     });
   }
 
   return (
-    <>
-      <main className="flex-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden min-w-0">
-        <div className="h-14 px-5 flex items-center shrink-0">
-          <h2 className="font-medium text-base text-zinc-200">Chat</h2>
-        </div>
+  <>
+    <main className="flex-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden min-w-0">
+      <div className="h-14 px-5 flex items-center shrink-0">
+        <h2 className="font-medium text-base text-zinc-200">Chat</h2>
+      </div>
+      {chatPanel}
+    </main>
 
-        <div className="flex-1 flex flex-col overflow-y-auto px-6 min-h-0">
-          {!hasSources ? (
-            <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center">
-              <p className="text-sm text-zinc-500">
-                Add a source from the panel on the left to start chatting.
-              </p>
-            </div>
-          ) : isLoadingHistory ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center">
-              <p className="text-sm text-zinc-500">
-                Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.
-              </p>
-            </div>
-          ) : (
-            <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col gap-6 py-6">
-              {messages.map((msg, i) => (
-                <MessageBubble key={i} message={msg} onCitationClick={openCitation} />
-              ))}
-              {isStreaming && messages[messages.length - 1]?.content === "" && (
-                <div className="flex items-center gap-2 text-zinc-500 text-sm">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Thinking...
-                </div>
-              )}
-              <div ref={scrollRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Input Bar */}
-        <div className="px-6 pb-6 pt-2 shrink-0">
-          <div className="max-w-3xl mx-auto relative h-14 rounded-full border border-zinc-800 bg-zinc-900 flex items-center pl-5 pr-2 gap-3">
-            <Input
-              type="text"
-              placeholder="Start typing..."
-              value={input}
-              disabled={!hasSources || isStreaming}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              className="flex-1 bg-transparent border-0 shadow-none text-sm placeholder:text-zinc-600 focus-visible:ring-0 px-0 h-full"
-            />
-            <span className="text-xs text-zinc-600 shrink-0">{sourceCount} sources</span>
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!hasSources || !input.trim() || isStreaming}
-              className="rounded-full h-10 w-10 shrink-0 bg-zinc-700 text-white hover:bg-zinc-600 disabled:opacity-100 disabled:bg-zinc-800"
-              aria-label="Send message"
-            >
-              {isStreaming ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ArrowRight className="w-4 h-4" />
-              )}
-            </Button>
+    {selectedSource && typeof document !== "undefined" && createPortal(
+  <div className="fixed inset-0 z-[999] bg-zinc-950 flex">
+    {/* Collapsible chat drawer */}
+    <div className={`relative shrink-0 h-full bg-zinc-900 border-r border-zinc-800 flex flex-col transition-all duration-200 ${chatCollapsed ? "w-0" : "w-[360px]"}`}>
+      {!chatCollapsed && (
+        <>
+          <div className="h-14 px-5 flex items-center justify-between shrink-0 border-b border-zinc-800">
+            <h2 className="font-medium text-sm text-zinc-200">Chat</h2>
+            
           </div>
-        </div>
-      </main>
+          {chatPanel}
+        </>
+      )}
+    </div>
 
-      <SourceViewerPanel selectedSource={selectedSource} onClose={() => setSelectedSource(null)} />
-    </>
-  );
+    {/* Collapse toggle tab */}
+    <button
+      onClick={() => setChatCollapsed((c) => !c)}
+      className="absolute top-1/2 -translate-y-1/2 z-20 h-16 w-5 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded-r-lg text-zinc-400 hover:text-white transition-all"
+      style={{ left: chatCollapsed ? 0 : 360 }}
+    >
+      {chatCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+    </button>
+
+    {/* Document viewport with its own top toolbar */}
+    {/* Document viewport with its own top toolbar */}
+<div className="flex-1 flex flex-col min-w-0">
+  <div className="h-12 px-4 flex items-center justify-between shrink-0 bg-zinc-900 border-b border-zinc-800">
+    <span className="text-xs text-zinc-400 truncate max-w-xs">{selectedSource.title}</span>
+
+    <div className="flex items-center gap-3">
+      {selectedSource.sourceType === "pdf" && selectedSource.fileUrl && (
+        <div className="flex items-center gap-1 bg-zinc-800 rounded-full px-1 py-1">
+          <button onClick={() => setPdfScale((s) => Math.max(0.5, s - 0.2))} className="p-1.5 rounded-full text-zinc-300 hover:bg-zinc-700 hover:text-white">
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] font-medium text-white bg-zinc-800  rounded-full px-2 py-0.5 min-w-11 text-center">
+            {Math.round(pdfScale * 100)}%
+          </span>
+          <button onClick={() => setPdfScale((s) => Math.min(3, s + 0.2))} className="p-1.5 rounded-full text-zinc-300 hover:bg-zinc-700 hover:text-white">
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      <button onClick={() => setSelectedSource(null)} className="h-7 w-7 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-white">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  </div>
+
+  <div className="flex-1 min-h-0 bg-zinc-950 flex flex-col">
+    <SourceContent source={selectedSource} scale={pdfScale} />
+  </div>
+</div>
+  </div>,
+  document.body
+)}
+  </>
+);
 }
 // Converts [n] markers into markdown link syntax so ReactMarkdown parses
 // them as nodes we can intercept and render as citation chips.
@@ -342,6 +400,8 @@ const { complete, pending } = splitCompleteAndPending(message.content);
   const value = String(children).replace(/\n$/, "");
   const isInline = !match && !value.includes("\n");
 
+
+
   if (isInline) {
     return (
       <code className="bg-zinc-800 text-zinc-200 rounded px-1.5 py-0.5 text-xs font-mono">
@@ -354,11 +414,35 @@ const { complete, pending } = splitCompleteAndPending(message.content);
 },
 pre: ({ children }) => <>{children}</>,
              
-              a: ({ href, children }) => {
+a: ({ href, children }) => {
   if (href?.startsWith("#citation-")) {
     const idx = Number(href.replace("#citation-", ""));
     const citation = message.citations?.find((c) => c.index === idx);
+      function formatTimestamp(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
     if (citation) {
+      if (citation.sourceType === "website" && citation.url) {
+        return (
+          <a href={citation.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-xs mx-0.5">
+            {new URL(citation.url).hostname}
+          </a>
+        );
+      }
+
+      if (citation.sourceType === "youtube" && citation.startSeconds != null) {
+          return (
+          <button
+            onClick={() => onCitationClick(citation)}
+            className="text-blue-400 font-medium hover:underline mx-0.5"
+          >
+            ({formatTimestamp(citation.startSeconds)})
+          </button>
+  );
+      }
+
       return (
         <button
           onClick={() => onCitationClick(citation)}

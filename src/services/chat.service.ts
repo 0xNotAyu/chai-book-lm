@@ -1,9 +1,9 @@
 import connectMongoDB from "@/lib/mongodb";
 import { Notebook } from "@/models/Notebook.model";
 import { openai, CHAT_MODEL } from "@/lib/openai";
-import { vectorService, type RetrievedChunk } from "@/services/vector.service";
+import { retrieveChunksAdvanced } from "@/services/retrieval.service";
+import type { RetrievedChunk } from "@/services/vector.service"
 
-const TOP_K = 25;
 
 export interface ChatCitation {
   index: number; // matches the [n] markers the model is instructed to cite with
@@ -12,6 +12,7 @@ export interface ChatCitation {
   title: string;
   snippet: string;
   url: string | null;
+  fileUrl: string | null;
   page: number | null;
   startSeconds: number | null;
   endSeconds: number | null;
@@ -33,7 +34,7 @@ function buildSystemPrompt(chunks: RetrievedChunk[]): string {
     "CITATION RULES (follow exactly):",
     "- Cite every factual claim with the source number in square brackets, e.g. [1].",
     "Example of correct citation: 'Steve has strong evasion options [1][4].'",
-"Example of WRONG citation (never do this): 'Steve has strong evasion options 14.'",
+    "Example of WRONG citation (never do this): 'Steve has strong evasion options 14.'",
     "- Never invent a citation number that isn't in the SOURCES list below.",
     "",
     "ANSWER QUALITY RULES:",
@@ -41,7 +42,8 @@ function buildSystemPrompt(chunks: RetrievedChunk[]): string {
     "- If the user asks for a list (moves, stances, steps, etc.), enumerate every distinct item you can find evidence for across ALL fragments, citing each item to its source fragment.",
     "- Only say the sources don't contain enough information if you've checked every fragment and genuinely found nothing relevant — not if the information is merely spread out or partial.",
     "- Keep answers well formatted: use bullet points or numbered lists for enumerable content, short paragraphs otherwise.",
-    "",
+    "- Before including any fact, verify it is actually about the subject the user asked about. If a retrieved fragment discusses a different character/topic/entity than the one asked, DO NOT include it — even if it's tangentially related or appeared in the search results.",
+    "- If the user's question names a specific person, character, product, or entity, only use fragments that explicitly mention that exact name. Ignore fragments about a different named entity even if the topic is similar.",
     "SOURCES:",
     context || "(No relevant sources were found for this question.)",
   ].join("\n");
@@ -68,11 +70,7 @@ export async function* streamChatAnswer(params: {
 
   try {
     // 1. Retrieve relevant chunks, scoped to this notebook only.
-    const chunks = await vectorService.searchSimilarChunks({
-      notebookId,
-      query: question,
-      topK: TOP_K,
-    });
+    const chunks = await retrieveChunksAdvanced({ notebookId, query: question });
 
     console.log(`\n[RAG DEBUG] notebookId=${notebookId} query="${question}"`);
 console.log(`[RAG DEBUG] retrieved ${chunks.length} chunks:`);
@@ -86,6 +84,7 @@ chunks.forEach((c) => {
       sourceType: c.sourceType,
       title: c.sourceTitle,
       snippet: c.text,
+      fileUrl: c.fileUrl,
       url: c.url,
       page: c.page,
       startSeconds: c.startSeconds,

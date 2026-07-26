@@ -14,6 +14,7 @@ export interface RetrievedChunk {
   sourceTitle: string;
   url: string | null;
   chunkIndex: number;
+  fileUrl: string | null;
   text: string;
   page: number | null;
   startSeconds: number | null;
@@ -73,6 +74,7 @@ export interface IndexSourceInput {
   sourceType: ChunkableSourceType;
   title: string;
   url?: string;
+   fileUrl?: string;
   rawText: string;
 }
 
@@ -103,6 +105,7 @@ class VectorService {
           sourceTitle: input.title,
           url: input.url ?? null,
           chunkIndex: chunk.chunkIndex,
+          fileUrl: input.fileUrl ?? null,
           text: chunk.text,
           page: chunk.page ?? null,
           startSeconds: chunk.startSeconds ?? null,
@@ -152,6 +155,36 @@ class VectorService {
       ...(r.payload as Omit<RetrievedChunk, "score">),
     }));
   }
+
+  // Add near the top of VectorService class, after searchSimilarChunks
+
+/** Embeds a query and searches, scoped to one notebook — returns raw hits (used by retrieval fusion). */
+async searchByEmbedding(params: {
+  notebookId: string;
+  vector: number[];
+  limit: number;
+}): Promise<RetrievedChunk[]> {
+  await ensureCollection();
+
+  const results = await qdrant.search(COLLECTION_NAME, {
+    vector: params.vector,
+    limit: params.limit,
+    filter: {
+      must: [{ key: "notebookId", match: { value: params.notebookId } }],
+    },
+    with_payload: true,
+  });
+
+  return results.map((r) => ({
+    score: r.score,
+    ...(r.payload as Omit<RetrievedChunk, "score">),
+  }));
+}
+
+/** Embeds multiple query strings in one batched OpenAI call. */
+async embedQueries(texts: string[]): Promise<number[][]> {
+  return embedBatch(texts);
+}
 }
 
 export const vectorService = new VectorService();

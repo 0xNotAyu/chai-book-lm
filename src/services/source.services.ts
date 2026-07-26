@@ -1,6 +1,7 @@
 import connectMongoDB from "@/lib/mongodb";
 import Source from "../models/Source.model";
 import { vectorService } from "./vector.service";
+import { uploadPdfBuffer } from "@/lib/cloudinary";
 
 import {
   extractPdf,
@@ -18,7 +19,7 @@ class SourceService {
       sourceType: "pdf" | "youtube" | "website" | "text" | "vtt";
       url?: string;
       fileName?: string;
-      textContent?: string; // raw pasted text (paste-text dialog step)
+      textContent?: string;
       status?: "processing" | "completed" | "failed";
     },
     fileBuffer?: Buffer // binary data for pdf / vtt / uploaded .txt files
@@ -37,11 +38,13 @@ class SourceService {
     // background job — fine for the scope of this project.
     try {
       let extractedText = "";
+      let fileUrl: string | undefined;
 
       switch (data.sourceType) {
         case "pdf":
           if (!fileBuffer) throw new Error("No file buffer provided for PDF.");
           extractedText = await extractPdf(fileBuffer);
+          fileUrl = await uploadPdfBuffer(fileBuffer, data.fileName || `${sourceDoc._id}.pdf`);
           break;
 
         case "vtt":
@@ -79,18 +82,20 @@ class SourceService {
       }
 
       // Chunk -> embed -> store in Qdrant
-      const { chunkCount } = await vectorService.indexSource({
-        sourceId: sourceDoc._id.toString(),
-        notebookId: data.notebookId,
-        sourceType: data.sourceType,
-        title: data.title,
-        url: data.url,
-        rawText: extractedText,
-      });
+        const { chunkCount } = await vectorService.indexSource({
+          sourceId: sourceDoc._id.toString(),
+          notebookId: data.notebookId,
+          sourceType: data.sourceType,
+          title: data.title,
+          url: data.url,
+          fileUrl,
+          rawText: extractedText,
+        });
 
       // 3. Mark as completed once extraction + indexing both succeed
       await this.updateSource(sourceDoc._id.toString(), {
         status: "completed",
+        fileUrl,
         chunkCount,
       });
 
@@ -134,6 +139,7 @@ class SourceService {
       sourceType?: "pdf" | "youtube" | "website" | "text" | "vtt";
       url?: string;
       fileName?: string;
+      fileUrl?: string;
       status?: "processing" | "completed" | "failed";
       errorMessage?: string | null;
       chunkCount?: number;
