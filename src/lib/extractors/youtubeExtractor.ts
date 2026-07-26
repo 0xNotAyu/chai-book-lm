@@ -34,16 +34,25 @@ const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 
 async function getCaptionTracks(videoId: string): Promise<CaptionTrack[]> {
   const res = await fetch(
-    `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
+    `https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        Origin: "https://www.youtube.com",
+        Referer: "https://www.youtube.com/",
+      },
       body: JSON.stringify({
         videoId,
         context: {
           client: {
             clientName: "WEB",
-            clientVersion: "2.20240101.00.00",
+            clientVersion: "2.20240401.01.00",
+            hl: "en",
+            gl: "US",
           },
         },
       }),
@@ -56,10 +65,20 @@ async function getCaptionTracks(videoId: string): Promise<CaptionTrack[]> {
 
   const data = await res.json();
 
+  // TEMP DEBUG — remove once working. Shows us exactly what YouTube sent
+  // back so we know if it's "no captions" vs "blocked" vs "shape changed".
+  console.log("[youtube debug] playabilityStatus:", data?.playabilityStatus?.status);
+  console.log("[youtube debug] has captions key:", !!data?.captions);
+  console.log("[youtube debug] raw captions:", JSON.stringify(data?.captions)?.slice(0, 500));
+
   const tracks: CaptionTrack[] =
     data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
 
   if (!tracks.length) {
+    const status = data?.playabilityStatus?.status;
+    if (status && status !== "OK") {
+      throw new Error(`YouTube blocked this request (status: ${status}). This may need a different extraction approach for hosted environments.`);
+    }
     throw new Error(
       "This video has no captions/subtitles available (either disabled by the uploader or auto-captions weren't generated)."
     );
