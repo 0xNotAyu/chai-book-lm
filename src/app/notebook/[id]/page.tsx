@@ -43,14 +43,7 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
         <aside className="w-[300px] shrink-0 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden">
           <div className="h-14 px-5 flex items-center justify-between shrink-0">
             <h2 className="font-medium text-base text-zinc-200">Sources</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-              aria-label="Collapse source panel"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </Button>
+            
           </div>
 
           <div className="px-4 pb-3 flex flex-col gap-3">

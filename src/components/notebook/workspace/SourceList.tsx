@@ -163,9 +163,7 @@ function SourceItem({ source, notebookId, onDeleted }: { source: Source, noteboo
 export function SourceList({ notebookId, sources = [], onSourceDeleted }: SourceListProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b">
-        <h3 className="text-sm font-semibold tracking-tight">Your Sources</h3>
-      </div>
+      
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {sources.length === 0 ? (
