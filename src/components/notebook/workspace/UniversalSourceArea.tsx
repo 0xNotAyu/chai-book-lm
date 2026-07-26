@@ -40,7 +40,7 @@ const STEP_META: Record<Exclude<SourceStep, "select">, { title: string; descript
   },
   youtube: {
     title: "Add YouTube video",
-    description: "Paste a video URL and we'll pull the transcript.",
+    description: "Paste a video URL and we'll pull the transcript. ",
   },
   text: {
     title: "Add copied text",
@@ -256,13 +256,22 @@ export function UniversalSourceArea({
   "
     />
               ) : (
-                <Input
-                  type="url"
-                  placeholder="https://..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
-                />
+                <>
+  <Input
+    type="url"
+    placeholder="https://..."
+    value={inputValue}
+    onChange={(e) => setInputValue(e.target.value)}
+    className="bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
+  />
+
+  {step === "youtube" && (
+    <p className="mt-2 text-xs text-red-400 leading-relaxed">
+      YouTube often blocks cloud servers from doing this. Try one of our demo
+      notebooks, or upload a <code>.vtt</code> transcript file instead.
+    </p>
+  )}
+</>
               )}
             </div>
 
