@@ -1,36 +1,544 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🍵 ChaiBookLM
 
-## Getting Started
+ **An AI-powered Research Assistant inspired by Google NotebookLM.**
 
-First, run the development server:
+ Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), generate AI-powered study materials, and share them with anyone.
+
+---
+
+## 🚀 Overview
+
+ChaiBookLM is a full-stack AI research assistant built as part of the **GenAI with JS 2026** assignment.
+
+The application allows users to organize information into notebooks, upload multiple knowledge sources, build an isolated knowledge base for every notebook, and ask questions grounded entirely on the uploaded content.
+
+Unlike a traditional chatbot, every response is backed by retrieved context from the user's own sources and includes citations that can be inspected.
+
+Beyond conversational search, ChaiBookLM can also generate AI-powered learning artifacts such as reports, flashcards, and quizzes which can be shared publicly.
+
+---
+
+# ✨ Features
+
+## 📙 Notebook Management
+
+* Create notebooks
+* Rename notebooks
+* Delete notebooks
+* Notebook isolation
+* Emoji support
+* Responsive dashboard
+* Loading & empty states
+
+---
+
+## 📂 Knowledge Sources
+
+Supports multiple source types:
+
+* 📄 PDF
+* 📝 Plain Text (.txt)
+* 🌐 Website URLs
+* ▶️ YouTube Videos
+* 📜 VTT Transcript Files
+
+Each notebook can contain multiple knowledge sources.
+
+---
+
+## ⚙️ Source Processing Pipeline
+
+Every uploaded source goes through the following pipeline:
+
+Upload
+
+↓
+
+Content Extraction
+
+↓
+
+Text Chunking
+
+↓
+
+Embedding Generation
+
+↓
+
+Vector Storage (Qdrant)
+
+↓
+
+Ready for AI Search
+
+Each source also maintains its own indexing state:
+
+* Uploading
+* Indexing
+* Ready
+* Failed
+
+---
+
+## 🧠 Retrieval Augmented Generation (RAG)
+
+When the user asks a question:
+
+1. User query is embedded
+2. Qdrant performs semantic vector search
+3. Most relevant chunks are retrieved
+4. Retrieved context is sent to the LLM
+5. AI generates a grounded response
+6. Citations are attached to every answer
+
+This minimizes hallucinations by forcing the model to answer using only retrieved context.
+
+---
+
+## 💬 AI Chat
+
+* Natural language conversations
+* Streaming responses
+* Markdown formatting
+* Context-aware retrieval
+* Notebook-specific memory
+* Grounded answers only
+
+---
+
+## 🔖 Citations
+
+Every AI response includes citations.
+
+Users can inspect exactly where an answer came from.
+
+Supported citation viewers:
+
+* PDF
+* Website
+* Plain Text
+* YouTube Timestamp
+* Transcript Highlight
+
+This ensures complete transparency and source attribution.
+
+---
+
+# 🎓 AI Study Tools
+
+ChaiBookLM goes beyond question answering.
+
+Users can generate learning artifacts directly from their notebook.
+
+## 📄 AI Report
+
+Generate structured reports from notebook knowledge.
+
+Perfect for:
+
+* Revision
+* Documentation
+* Research Notes
+* Summaries
+
+---
+
+## 🗂 Flashcards
+
+Automatically generate study flashcards for active recall learning.
+
+Ideal for exam preparation.
+
+---
+
+## ❓ Quiz Generator
+
+Generate quizzes directly from uploaded sources.
+
+Helps users test their understanding instead of simply reading.
+
+---
+
+# 🌍 Shareable Artifacts
+
+One of the unique features of ChaiBookLM is artifact sharing.
+
+Generated Reports, Flashcards and Quizzes can be shared using a public URL.
+
+Recipients **do not need access to the notebook**.
+
+Example:
+
+```
+/share/:artifactId
+```
+
+This allows users to share generated study material while keeping their notebook private.
+
+---
+
+# 🏗 Architecture
+
+```
+                User
+                  │
+                  ▼
+            Next.js Frontend
+                  │
+                  ▼
+            API Route Handlers
+                  │
+        ┌─────────┴─────────┐
+        ▼                   ▼
+    MongoDB             OpenAI API
+        │                   │
+        ▼                   ▼
+ Notebook Data        Embeddings / Chat
+        │
+        ▼
+     Qdrant
+(Vector Database)
+        │
+        ▼
+ Relevant Chunks
+        │
+        ▼
+Grounded AI Response
+```
+
+---
+
+# 🔄 RAG Pipeline
+
+```
+Upload Source
+      │
+      ▼
+Extract Text
+      │
+      ▼
+Chunk Content
+      │
+      ▼
+Generate Embeddings
+      │
+      ▼
+Store in Qdrant
+      │
+      ▼
+User Question
+      │
+      ▼
+Similarity Search
+      │
+      ▼
+Retrieve Context
+      │
+      ▼
+OpenAI
+      │
+      ▼
+Grounded Response
+      │
+      ▼
+Return Citations
+```
+
+---
+
+# 🛠 Tech Stack
+
+## Frontend
+
+* Next.js 16
+* React 19
+* TypeScript
+* Tailwind CSS
+* shadcn/ui
+* Lucide Icons
+
+---
+
+## Backend
+
+* Next.js Route Handlers
+* TypeScript
+
+---
+
+## Database
+
+* MongoDB
+* Mongoose
+
+---
+
+## Vector Database
+
+* Qdrant
+
+---
+
+## AI
+
+* OpenAI API
+* Embeddings
+* Streaming Chat Completion
+
+---
+
+## File Processing
+
+* PDF Extraction
+* Website Extraction
+* YouTube Transcript Extraction
+* VTT Parsing
+* Text Extraction
+
+---
+
+## Storage
+
+* Cloudinary
+
+---
+
+# 📁 Project Structure
+
+```
+src
+│
+├── app
+│   ├── api
+│   ├── notebook
+│   ├── share
+│
+├── components
+│   ├── dashboard
+│   ├── workspace
+│   ├── ui
+│
+├── services
+│
+├── models
+│
+├── validators
+│
+├── extractors
+│
+├── lib
+│
+└── types
+```
+
+---
+
+# 📡 API
+
+Notebook APIs
+
+* Create Notebook
+* List Notebooks
+* Rename Notebook
+* Delete Notebook
+
+Source APIs
+
+* Upload Source
+* Delete Source
+* Re-index Source
+
+Chat APIs
+
+* Streaming Chat
+* Conversation History
+
+Artifact APIs
+
+* Generate Report
+* Generate Flashcards
+* Generate Quiz
+* Share Artifact
+
+---
+
+# 📦 Installation
+
+Clone the repository
+
+```bash
+git clone https://github.com/0xNotAyu/chai-book-lm.git
+```
+
+Install dependencies
+
+```bash
+npm install
+```
+
+Run development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# 🔐 Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local`
 
-## Learn More
+```env
+MONGODB_URI=
 
-To learn more about Next.js, take a look at the following resources:
+OPENAI_API_KEY=
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+QDRANT_URL=
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+QDRANT_API_KEY=
 
-## Deploy on Vercel
+CLOUDINARY_CLOUD_NAME=
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+CLOUDINARY_API_KEY=
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+CLOUDINARY_API_SECRET=
+```
+
+---
+
+# 🚀 Deployment
+
+The application can be deployed on:
+
+* Vercel
+* MongoDB Atlas
+* Qdrant Cloud
+* Cloudinary
+
+---
+
+# 🎯 Assignment Features Covered
+
+## ✅ Notebook Management
+
+* Multiple notebooks
+* Create
+* Rename
+* Delete
+* Isolation
+
+---
+
+## ✅ Source Ingestion
+
+* PDF
+* TXT
+* Website
+* YouTube
+* VTT
+
+---
+
+## ✅ Indexing Pipeline
+
+* Extraction
+* Chunking
+* Embeddings
+* Vector Storage
+* Re-indexing
+
+---
+
+## ✅ AI Responses
+
+* Streaming
+* RAG
+* Prompt Engineering
+* Minimal Hallucination
+
+---
+
+## ✅ Citation System
+
+* Every response contains citations
+* Source inspection
+* Metadata preserved
+
+---
+
+## ✅ Engineering
+
+* Clean architecture
+* Separation of concerns
+* Reusable components
+* Service layer
+* Validation
+* Error handling
+
+---
+
+## ✅ UI
+
+* Responsive layout
+* Loading states
+* Empty states
+* Modern notebook experience
+
+---
+
+# 📸 Screenshots
+
+Add screenshots here.
+
+* Dashboard
+* Notebook Workspace
+* Source Upload
+* AI Chat
+* Citation Viewer
+* Flashcards
+* Quiz
+* Report
+* Shared Artifact
+
+---
+
+# 🔮 Future Improvements
+
+* Authentication
+* Anonymous users
+* Collaborative notebooks
+* Podcast generation
+* Learning roadmaps
+* OCR support
+* DOCX support
+* Image understanding
+* Hybrid Search (BM25 + Vector)
+* Multi-language support
+
+---
+
+# 💡 Engineering Decisions
+
+* Every notebook has its own isolated knowledge base.
+* Vector search is performed using Qdrant.
+* AI responses are always grounded using retrieved context.
+* Artifacts are generated independently from conversations.
+* Shared artifacts are public while notebooks remain private.
+* The application prioritizes retrieval quality over unrestricted generation to reduce hallucinations.
+
+---
+
+# 🙏 Acknowledgements
+
+Built as part of the **GenAI with JS 2026** assignment.
+
+Inspired by **Google NotebookLM** and modern Retrieval-Augmented Generation (RAG) systems.
+
+---
+
+# 👨‍💻 Author
+
+**Aayush**
+
+If you found this project interesting, feel free to ⭐ the repository!
