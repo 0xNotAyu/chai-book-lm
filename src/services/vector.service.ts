@@ -36,12 +36,6 @@ async function ensureCollection(): Promise<void> {
         });
       }
 
-      // Qdrant requires an explicit payload index before you can filter on a
-      // field — both `deleteSourceVectors` (filters by sourceId) and
-      // `searchSimilarChunks` (filters by notebookId) need these to exist,
-      // or Qdrant throws 400 "Index required but not found".
-      // createPayloadIndex is idempotent-safe: if the index already exists,
-      // Qdrant just no-ops / returns ok, so it's fine to call on every boot.
       await Promise.all([
         qdrant.createPayloadIndex(COLLECTION_NAME, {
           field_name: "sourceId",
@@ -74,7 +68,7 @@ export interface IndexSourceInput {
   sourceType: ChunkableSourceType;
   title: string;
   url?: string;
-   fileUrl?: string;
+  fileUrl?: string;
   rawText: string;
 }
 
@@ -156,35 +150,57 @@ class VectorService {
     }));
   }
 
-  // Add near the top of VectorService class, after searchSimilarChunks
+  /** Embeds a query and searches, scoped to one notebook — returns raw hits (used by retrieval fusion). */
+  async searchByEmbedding(params: {
+    notebookId: string;
+    vector: number[];
+    limit: number;
+  }): Promise<RetrievedChunk[]> {
+    await ensureCollection();
 
-/** Embeds a query and searches, scoped to one notebook — returns raw hits (used by retrieval fusion). */
-async searchByEmbedding(params: {
-  notebookId: string;
-  vector: number[];
-  limit: number;
-}): Promise<RetrievedChunk[]> {
-  await ensureCollection();
+    const results = await qdrant.search(COLLECTION_NAME, {
+      vector: params.vector,
+      limit: params.limit,
+      filter: {
+        must: [{ key: "notebookId", match: { value: params.notebookId } }],
+      },
+      with_payload: true,
+    });
 
-  const results = await qdrant.search(COLLECTION_NAME, {
-    vector: params.vector,
-    limit: params.limit,
-    filter: {
-      must: [{ key: "notebookId", match: { value: params.notebookId } }],
-    },
-    with_payload: true,
-  });
+    return results.map((r) => ({
+      score: r.score,
+      ...(r.payload as Omit<RetrievedChunk, "score">),
+    }));
+  }
 
-  return results.map((r) => ({
-    score: r.score,
-    ...(r.payload as Omit<RetrievedChunk, "score">),
-  }));
-}
+  /**
+   * Returns a broad, unranked sample of chunks across an entire notebook
+   * (not query-based search) — used by artifact generation (report /
+   * flashcards / quiz), which needs representative coverage of everything
+   * rather than results for one specific question.
+   */
+  async getNotebookChunks(notebookId: string, limit = 80): Promise<RetrievedChunk[]> {
+    await ensureCollection();
 
-/** Embeds multiple query strings in one batched OpenAI call. */
-async embedQueries(texts: string[]): Promise<number[][]> {
-  return embedBatch(texts);
-}
+    const results = await qdrant.scroll(COLLECTION_NAME, {
+      filter: {
+        must: [{ key: "notebookId", match: { value: notebookId } }],
+      },
+      limit,
+      with_payload: true,
+      with_vector: false,
+    });
+
+    return results.points.map((p) => ({
+      score: 1,
+      ...(p.payload as Omit<RetrievedChunk, "score">),
+    }));
+  }
+
+  /** Embeds multiple query strings in one batched OpenAI call. */
+  async embedQueries(texts: string[]): Promise<number[][]> {
+    return embedBatch(texts);
+  }
 }
 
 export const vectorService = new VectorService();

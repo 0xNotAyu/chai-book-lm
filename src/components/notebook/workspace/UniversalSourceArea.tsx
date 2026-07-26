@@ -219,7 +219,7 @@ export function UniversalSourceArea({
         ) : (
           <>
             <DialogHeader>
-              <button
+              {/* <button
                 onClick={() => {
                   setStep("select");
                   setInputValue("");
@@ -228,21 +228,33 @@ export function UniversalSourceArea({
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back
-              </button>
+              </button> */}
               <DialogTitle className="text-zinc-100">{STEP_META[step].title}</DialogTitle>
               <DialogDescription className="text-zinc-500">
                 {STEP_META[step].description}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="py-2">
+            <div className="flex-1 overflow-y-auto py-2">
               {step === "text" ? (
                 <Textarea
-                  placeholder="Paste your text here..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="min-h-37.5 bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
-                />
+      placeholder="Paste your text here..."
+      value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      className="
+    h-[40vh]
+    resize-none
+    bg-zinc-950
+    border-zinc-800
+    shadow-none
+    outline-none
+    ring-0
+    focus:ring-0
+    focus-visible:ring-0
+    focus-visible:outline-none
+    focus-visible:border-zinc-700
+  "
+    />
               ) : (
                 <Input
                   type="url"
@@ -254,14 +266,14 @@ export function UniversalSourceArea({
               )}
             </div>
 
-            <DialogFooter>
-              <Button
+            <DialogFooter className="border-t border-zinc-800  shrink-0 border-0 ">
+              {/* <Button
                 variant="ghost"
                 onClick={resetAndClose}
                 className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
               >
                 Cancel
-              </Button>
+              </Button> */}
               <Button
                 onClick={handleSubmit}
                 disabled={!inputValue.trim()}

@@ -133,39 +133,55 @@ class SourceService {
    * original ingestion (no need to re-fetch the original file/URL).
    */
   async reindexSource(id: string) {
-    await connectMongoDB();
+  await connectMongoDB();
 
-    const source = await Source.findById(id).select("+extractedText");
-    if (!source) return null;
+  const source = await Source.findById(id).select("+extractedText");
+  if (!source) return null;
 
-    await Source.findByIdAndUpdate(id, { status: "processing", errorMessage: null });
+  await Source.findByIdAndUpdate(id, { status: "processing", errorMessage: null });
 
-    try {
-      if (!source.extractedText || !source.extractedText.trim()) {
-        throw new Error("No stored content available to re-index this source.");
+  try {
+    let extractedText = source.extractedText;
+
+    // No stored text usually means the original ingestion failed before
+    // extraction completed. For url-based sources we can just re-fetch;
+    // uploaded files (pdf/vtt/txt) with no stored text can't be recovered.
+    if (!extractedText || !extractedText.trim()) {
+      if (source.sourceType === "youtube" && source.url) {
+        extractedText = await extractYoutube(source.url);
+      } else if (source.sourceType === "website" && source.url) {
+        extractedText = await extractWebsite(source.url);
+      } else {
+        throw new Error(
+          "No stored content available to re-index this source. Please delete and re-upload it."
+        );
       }
-
-      // Remove old vectors before writing new ones so we don't end up with
-      // duplicate/stale chunks for this source.
-      await vectorService.deleteSourceVectors(id);
-
-      const { chunkCount } = await vectorService.indexSource({
-        sourceId: id,
-        notebookId: source.notebookId.toString(),
-        sourceType: source.sourceType,
-        title: source.title,
-        url: source.url,
-        fileUrl: source.fileUrl ?? undefined,
-        rawText: source.extractedText,
-      });
-
-      return await this.updateSource(id, { status: "completed", chunkCount, errorMessage: null });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to re-index source";
-      console.error(`Re-index failed for source ${id}:`, message);
-      return await this.updateSource(id, { status: "failed", errorMessage: message });
     }
+
+    await vectorService.deleteSourceVectors(id);
+
+    const { chunkCount } = await vectorService.indexSource({
+      sourceId: id,
+      notebookId: source.notebookId.toString(),
+      sourceType: source.sourceType,
+      title: source.title,
+      url: source.url,
+      fileUrl: source.fileUrl ?? undefined,
+      rawText: extractedText,
+    });
+
+    return await this.updateSource(id, {
+      status: "completed",
+      chunkCount,
+      errorMessage: null,
+      extractedText, // cache it so future reindexes don't need to re-fetch
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to re-index source";
+    console.error(`Re-index failed for source ${id}:`, message);
+    return await this.updateSource(id, { status: "failed", errorMessage: message });
   }
+}
 
   async getAllSources() {
     await connectMongoDB();

@@ -221,9 +221,7 @@ function SourceItem({
 export function SourceList({ notebookId, sources = [], onSourceDeleted, onSourceUpdated }: SourceListProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="px-1 py-3">
-        <h3 className="text-sm font-semibold tracking-tight text-zinc-400">Your Sources</h3>
-      </div>
+      
 
       <div className="flex-1 overflow-y-auto space-y-1">
         {sources.length === 0 ? (
