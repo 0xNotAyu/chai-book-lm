@@ -37,9 +37,9 @@ export default function Dashboard() {
       useEffect(() => {
 }, [selectedNotebook]);
 
-  async function fetchNotebooks() {
+async function fetchNotebooks(isRetry = false) {
     try {
-      setIsLoading(true);
+      if (!isRetry) setIsLoading(true);
 
       const res = await fetch("/api/notebooks");
       const data = await res.json();
@@ -53,7 +53,13 @@ export default function Dashboard() {
           updatedAt: notebook.updatedAt,
         }))
       );
-      
+
+      // First visit: cloning might still be finishing in the background on
+      // the server. If we got nothing back, poll a couple times instead of
+      // making the user manually refresh.
+      if (data.length === 0 && !isRetry) {
+        setTimeout(() => fetchNotebooks(true), 1200);
+      }
     } catch (error) {
       console.error(error);
     } finally {

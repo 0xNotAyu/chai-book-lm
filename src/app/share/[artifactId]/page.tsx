@@ -23,7 +23,7 @@ export default async function SharePage({ params }: SharePageProps) {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <header className="h-16 px-6 flex items-center justify-between border-b border-zinc-900 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-lg">📙</span>
+
           <span className="font-medium text-zinc-200">{artifact.title}</span>
         </div>
         <span className="text-xs text-zinc-600 capitalize">{artifact.type} · Shared view</span>
