@@ -193,6 +193,11 @@ class SourceService {
     return await Source.findById(id);
   }
 
+  async getExtractedTextById(id: string) {
+    await connectMongoDB();
+    return await Source.findById(id).select("+extractedText sourceType");
+  }
+
   async getSourcesByNotebookId(notebookId: string) {
     await connectMongoDB();
     // extractedText / cloudinaryPublicId are select:false in the schema, so

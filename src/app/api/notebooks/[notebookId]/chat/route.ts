@@ -58,3 +58,11 @@ export async function GET(_req: Request, { params }: RouteParams) {
 
   return NextResponse.json(notebook.conversations ?? []);
 }
+
+export async function DELETE(_req: Request, { params }: RouteParams) {
+  const { notebookId } = await params;
+  await connectMongoDB();
+  const notebook = await Notebook.findByIdAndUpdate(notebookId, { $set: { conversations: [] } }, { new: true });
+  if (!notebook) return NextResponse.json({ error: "Notebook not found" }, { status: 404 });
+  return NextResponse.json({ message: "Chat cleared" });
+}

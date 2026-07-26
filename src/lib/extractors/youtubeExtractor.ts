@@ -16,6 +16,8 @@ export async function extractYoutube(url: string): Promise<string> {
     return fullText.trim();
   } catch (error) {
     console.error("Error fetching YouTube transcript:", error);
-    throw new Error("Failed to extract transcript from YouTube video. Ensure it has captions enabled.");
+    throw new Error(
+      "Couldn't fetch this video's transcript — YouTube often blocks cloud servers from doing this. Try one of our demo notebooks, or upload a .vtt transcript file instead."
+    );
   }
 }

@@ -48,6 +48,8 @@ const NotebookSchema = new Schema(
       type: [MessageSchema],
       default: [],
     },
+    userId: { type: String, default: null, index: true },
+    isDemo: { type: Boolean, default: false },
   },
   {
     timestamps: true,

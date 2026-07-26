@@ -10,6 +10,7 @@ import { EmptyNotebookState } from "@/components/notebook/dashboard/EmptyNoteboo
 import { LoadingState } from "@/components/notebook/dashboard/LoadingState";
 import { RenameNotebookDialog } from "@/components/notebook/dashboard/RenameNotebookDialog";
 import { DeleteNotebookDialog } from "./DeleteNotebookDialog";
+import { OnboardingDialog } from "@/components/notebook/dashboard/OnboardingDialog";
 
 interface Notebook {
   id: string;
@@ -102,6 +103,7 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-background">
+      <OnboardingDialog />
       <div className="mx-auto max-w-7xl px-6 py-10">
         <DashboardHeader onNewNotebook={() => setDialogOpen(true)} />
 

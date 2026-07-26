@@ -26,6 +26,82 @@ function getYoutubeEmbedUrl(url: string, startSeconds?: number) {
   return `https://www.youtube.com/embed/${videoId}?start=${startSeconds ? Math.floor(startSeconds) : 0}&autoplay=1`;
 }
 
+function formatTime(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function VttViewer({ source }: { source: CitedSource }) {
+  const [cues, setCues] = useState<{ start: number; end: number; text: string }[] | null>(null);
+  const activeRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCues(null);
+
+    fetch(`/api/sources/${source.sourceId}/content`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const regex = /\[\[T:([\d.]+):([\d.]+)\]\]\s*([^\n]*)/g;
+        const parsed: { start: number; end: number; text: string }[] = [];
+        let m;
+        while ((m = regex.exec(data.extractedText || "")) !== null) {
+          parsed.push({ start: parseFloat(m[1]), end: parseFloat(m[2]), text: m[3].trim() });
+        }
+        setCues(parsed);
+      })
+      .catch(() => {
+        if (!cancelled) setCues([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source.sourceId]);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [cues, source.timestampSeconds]);
+
+  if (cues === null) {
+    return <p className="text-zinc-500 text-sm mt-16 text-center">Loading transcript...</p>;
+  }
+
+  if (cues.length === 0) {
+    return <p className="text-zinc-500 text-sm mt-16 text-center">No transcript content available.</p>;
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 max-w-2xl mx-auto w-full">
+      {cues.map((cue, i) => {
+        const isActive =
+          source.timestampSeconds != null &&
+          source.timestampSeconds >= cue.start &&
+          source.timestampSeconds <= cue.end + 2;
+
+        return (
+          <div
+            key={i}
+            ref={isActive ? activeRef : undefined}
+            className={`flex gap-3 py-1.5 px-2 rounded-lg ${
+              isActive ? "bg-blue-500/15 border border-blue-600/40" : ""
+            }`}
+          >
+            <span className="text-xs text-zinc-500 shrink-0 font-mono pt-0.5">
+              {formatTime(cue.start)}
+            </span>
+            <p className={`text-sm leading-relaxed ${isActive ? "text-blue-400" : "text-zinc-300"}`}>
+              {cue.text}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SourceContent({ source, scale = 1 }: { source: CitedSource; scale?: number }) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -67,6 +143,10 @@ export function SourceContent({ source, scale = 1 }: { source: CitedSource; scal
       </div>
     );
   }
+  if (sourceType === "vtt") {
+    return <VttViewer source={source} />;
+  }
+
 
   if (sourceType === "website" && url) {
     return (

@@ -8,8 +8,8 @@ interface QueryVariants {
 }
 
 const RRF_K = 60;
-const FINAL_K = 25;
-const PER_QUERY_LIMIT = 15;
+const FINAL_K = 35;          
+const PER_QUERY_LIMIT = 20;
 
 /** Rewrite the user's query into step-back, cleaned-up, and 3 sub-question variants. */
 async function queryRewriting(query: string): Promise<QueryVariants> {

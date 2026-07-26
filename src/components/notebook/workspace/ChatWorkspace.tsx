@@ -52,6 +52,16 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const expandedTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+useEffect(() => {
+  if (!hasSources || messages.length > 0 || isLoadingHistory) return;
+  fetch(`/api/notebooks/${notebookId}/suggestions`)
+    .then((r) => r.json())
+    .then((d) => setSuggestions(d.questions ?? []))
+    .catch(() => {});
+}, [hasSources, messages.length, isLoadingHistory, notebookId]);
+
   // Cheap heuristic instead of measuring the DOM — avoids ref conflicts since
   // this component's `chatPanel` JSX is mounted twice at once (main view +
   // citation drawer) whenever a source is selected.
@@ -65,6 +75,12 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
     }
   }
 
+  async function handleClearChat() {
+  if (!confirm("Clear this conversation? Your sources will stay.")) return;
+  await fetch(`/api/notebooks/${notebookId}/chat`, { method: "DELETE" });
+  setMessages([]);
+}
+
   const chatPanel = (
     <>
       <div className="flex-1 flex flex-col overflow-y-auto px-6 min-h-0">
@@ -77,10 +93,24 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
             <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center">
-            <p className="text-sm text-zinc-500">Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.</p>
-          </div>
-        ) : (
+  <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center gap-4">
+    <p className="text-sm text-zinc-500">Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.</p>
+    {suggestions.length > 0 && (
+      <div className="flex flex-col gap-2 w-full max-w-sm">
+        <p className="text-xs text-zinc-600">Not sure what to ask? Choose something:</p>
+        {suggestions.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => setInput(q)}
+            className="text-sm text-zinc-300 border border-zinc-800 rounded-full px-4 py-2 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+): (
           <div className="w-full flex-1 flex flex-col gap-6 py-6">
             {messages.map((msg, i) => (
               <MessageBubble key={i} message={msg} onCitationClick={openCitation} />
@@ -279,9 +309,17 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
   return (
     <>
       <main className="flex-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden min-w-0">
-        <div className="h-14 px-5 flex items-center shrink-0">
-          <h2 className="font-medium text-base text-zinc-200">Chat</h2>
-        </div>
+        <div className="h-14 px-5 flex items-center justify-between shrink-0">
+  <h2 className="font-medium text-base text-zinc-200">Chat</h2>
+  {messages.length > 0 && (
+    <button
+      onClick={handleClearChat}
+      className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+    >
+      Clear chat
+    </button>
+  )}
+</div>
         {chatPanel}
       </main>
 

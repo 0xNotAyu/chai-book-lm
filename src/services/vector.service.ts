@@ -114,6 +114,23 @@ class VectorService {
     return { chunkCount: totalPoints };
   }
 
+  async cloneSourceVectors(oldSourceId: string, newSourceId: string, newNotebookId: string) {
+    await ensureCollection();
+    const results = await qdrant.scroll(COLLECTION_NAME, {
+      filter: { must: [{ key: "sourceId", match: { value: oldSourceId } }] },
+      limit: 1000,
+      with_payload: true,
+      with_vector: true,
+    });
+    if (results.points.length === 0) return;
+    const points = results.points.map((p) => ({
+      id: randomUUID(),
+      vector: p.vector as number[],
+      payload: { ...(p.payload as any), sourceId: newSourceId, notebookId: newNotebookId },
+    }));
+    await qdrant.upsert(COLLECTION_NAME, { wait: true, points });
+  }
+
   /** Removes every chunk belonging to a source (called on source delete/re-index). */
   async deleteSourceVectors(sourceId: string): Promise<void> {
     await ensureCollection();
