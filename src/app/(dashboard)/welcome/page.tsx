@@ -136,8 +136,8 @@ export default function WelcomePage() {
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground">
-            No sign-up. Four demo notebooks (PDF, VTT, website, YouTube) are
-            ready when you arrive.
+           No sign-up. This is a demo project with temporary users created automatically based on your IP address.
+
           </p>
         </section>
 
@@ -316,7 +316,7 @@ export default function WelcomePage() {
         {/* Final CTA */}
         <section className="mx-auto max-w-5xl px-5 py-24 text-center">
           <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Open a demo notebook and ask it something
+            Ask it something.
           </h2>
 
           <Link
@@ -330,7 +330,7 @@ export default function WelcomePage() {
 
       {/* Footer */}
       <footer className="border-t border-border px-5 py-6 text-center text-sm text-muted-foreground">
-        ChaiBookLM · GenAI with JS 2026
+        ChaiBookLM · 0xNotAyu
       </footer>
     </div>
   );
