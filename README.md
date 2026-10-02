@@ -2,15 +2,17 @@
 
 **An AI-powered Research Assistant inspired by Google NotebookLM.**
 
-Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), generate AI-powered study materials, and share them with anyone.
+Upload multiple knowledge sources, chat with your documents using Retrieval-Augmented Generation (RAG), watch the retrieval pipeline work in real time, generate AI-powered study materials, and share them with anyone.
 
 ---
+
 ## 🚀 Live Deployed Link
 
-> https://chai-book-lm-alpha.vercel.app/
+> **https://chai-book-lm-seven.vercel.app**
+
+The app is behind a guest access gate. To try it, open the link, click **Try the app**, and enter a guest access token. Don't have one? See [Getting Access](#-getting-access).
 
 ---
-
 
 ## 🎥 Demo Video
 
@@ -18,40 +20,44 @@ Upload multiple knowledge sources, chat with your documents using Retrieval-Augm
 
 ---
 
-##  Overview
+## 🔑 Getting Access
 
-ChaiBookLM is a full-stack AI research assistant built as part of the **GenAI with JS 2026** assignment.
+ChaiBookLM calls paid APIs (LLM, embeddings, vector storage), so the live app is open to guests with an access token instead of being fully public.
 
-The application allows users to organize information into notebooks, upload multiple knowledge sources, build an isolated knowledge base for every notebook, and ask questions grounded entirely on the uploaded content.
+* Open the live link and click **Try the app**
+* No tokens? Contact me:
+  * 📧 [Aayush.sharma.0x@gmail.com](mailto:Aayush.sharma.0x@gmail.com)
+  * 💼 [linkedin.com/in/aayush-sharma-0x](https://linkedin.com/in/aayush-sharma-0x)
+  * 🐙 [github.com/0xNotAyu](https://github.com/0xNotAyu)
+
+---
+
+## Overview
+
+ChaiBookLM is a full-stack AI research assistant.
+
+The application lets users organize information into notebooks, upload multiple knowledge sources, build an isolated knowledge base for every notebook, and ask questions grounded entirely in the uploaded content.
 
 Unlike a traditional chatbot, every response is backed by retrieved context from the user's own sources and includes citations that can be inspected.
 
-Beyond conversational search, ChaiBookLM can also generate AI-powered learning artifacts such as reports, flashcards, and quizzes which can be shared publicly.
+Beyond conversational search, ChaiBookLM can also generate AI-powered learning artifacts such as reports, flashcards, and quizzes, which can be shared publicly.
 
-Every first-time visitor automatically gets a personal set of demo notebooks (PDF, VTT, Website, YouTube) cloned for them — so the app can be tried instantly with zero setup, with no login required.
+Heavy work (source indexing and artifact generation) runs as **background jobs**, so the UI stays responsive while the pipeline works.
 
 ---
 
 # ✨ Features
 
+
 ## 📙 Notebook Management
 
-* Multiple notebooks per (anonymous) user
+* Multiple notebooks per visitor
 * Create, rename, delete notebooks
+* Back button to return to the notebook list
 * Notebook isolation
 * Emoji support
 * Responsive dashboard
 * Loading & empty states
-* First-visit onboarding dialog introducing the pre-loaded demo notebooks
-
----
-
-## 👤 Per-Visitor Demo Notebooks
-
-* No login/signup — each visitor is identified by a secure, httpOnly cookie
-* On first visit, 4 demo notebooks (PDF / VTT / Website / YouTube) are automatically cloned into that visitor's own private workspace
-* Cloning is done atomically (via a dedicated lock collection) so concurrent requests or rapid refreshes can never create duplicate notebooks
-* Each visitor's notebooks, sources, and chat history are fully isolated from every other visitor
 
 ---
 
@@ -60,22 +66,23 @@ Every first-time visitor automatically gets a personal set of demo notebooks (PD
 Supports multiple source types:
 
 * 📄 PDF
-* 📝 Plain Text (.txt)
+* 📝 Plain Text (.txt or pasted text)
 * 🌐 Website URLs
 * ▶️ YouTube Videos
 * 📜 VTT Transcript Files
 
 Each notebook can contain multiple knowledge sources.
 
-> **Note:** YouTube transcript fetching can occasionally be blocked by YouTube for requests coming from cloud/server IPs. When this happens, the source fails with a clear, actionable message instead of a generic error, pointing users to the demo notebooks or VTT upload as a reliable alternative.
+> **Note:** YouTube transcript fetching can occasionally be blocked by YouTube for requests coming from cloud/server IPs. When this happens, the source fails with a clear, actionable message instead of a generic error. Uploading a `.vtt` transcript file is a reliable alternative.
 
 ---
 
 ## ⚙️ Source Processing Pipeline
 
-Every uploaded source goes through the following pipeline:
+Every added source goes through the following pipeline, run as a **background job (Inngest)**:
+
 ```
-Upload
+Add Source
 
 ↓
 
@@ -98,14 +105,13 @@ Vector Storage (Qdrant)
 Ready for AI Search
 ```
 
-Each source also maintains its own indexing state:
+Each source maintains its own state, shown live in the sources panel without a page refresh:
 
-* Uploading
-* Indexing
-* Ready
+* Processing
+* Completed
 * Failed (with a specific, human-readable error message)
 
-Sources can be deleted or re-indexed at any time without needing to re-upload — re-indexing reuses the originally extracted text to rebuild chunks/embeddings.
+Sources can be deleted or re-indexed at any time without re-uploading. Re-indexing reuses the originally extracted text to rebuild chunks and embeddings, and the job clears old vectors first, so retries never create duplicates.
 
 ---
 
@@ -113,27 +119,45 @@ Sources can be deleted or re-indexed at any time without needing to re-upload �
 
 When the user asks a question:
 
-1. The query is rewritten into multiple variants (typo-fixed rewrite, step-back question, HyDE hypothetical answer, and sub-questions)
-2. Each variant is embedded and searched against Qdrant in parallel, scoped strictly to that notebook
-3. Results are fused using Reciprocal Rank Fusion (RRF) for stronger retrieval quality
+1. The query is rewritten into multiple variants: a typo-fixed rewrite, a step-back question, and three sub-questions. In parallel, a **HyDE** hypothetical answer is generated
+2. Every variant is embedded and searched against Qdrant in parallel, scoped strictly to that notebook
+3. Results are fused using **Reciprocal Rank Fusion (RRF)** for stronger retrieval quality
 4. Retrieved context is sent to the LLM
-5. AI generates a grounded, streamed response
+5. The AI generates a grounded, streamed response
 6. Citations are attached to every answer
 
 This minimizes hallucinations by forcing the model to answer using only retrieved context.
 
 ---
 
+## 🔍 Live RAG Pipeline Trace
+
+Every answer shows what the pipeline is doing as it happens:
+
+* **Query rewriting**: the cleaned-up question, step-back question, and sub-queries
+* **HyDE**: the hypothetical answer used for search
+* **Embedding**: how many query vectors were created
+* **Vector search**: candidate chunks found across all queries
+* **Fusion**: unique passages after RRF and how many were matched by 2+ variants
+* **Generation**: the cited answer streaming in
+
+Each step reports its own timing. The trace folds away once the answer is complete and can be reopened at any time.
+
+---
+
 ## 💬 AI Chat
 
 * Natural language conversations
-* Streaming responses
+* Streaming responses (tokens, pipeline stages, and citations over one NDJSON stream)
 * Markdown formatting (including code blocks with copy/syntax highlighting)
 * Context-aware, multi-query retrieval
 * Notebook-specific memory (persisted conversation history)
 * Grounded answers only
-* **Clear Chat** — resets the conversation for a notebook without touching any of its sources
-* **AI-Suggested Questions** — when a notebook has no conversation yet, the app generates a handful of relevant starter questions from the notebook's own content, so users always know what to ask
+* **Copy** any answer with one click
+* **Regenerate** the last answer (replaces the old answer and re-runs the full pipeline)
+* **Partial answers are saved** if the connection drops mid-stream
+* **Clear Chat**: resets the conversation for a notebook without touching its sources
+* **AI-Suggested Questions**: when a notebook has no conversation yet, the app generates relevant starter questions from the notebook's own content
 
 ---
 
@@ -146,7 +170,7 @@ Users can inspect exactly where an answer came from.
 Supported citation viewers:
 
 * PDF (jumps to and renders the relevant page)
-* Website (opens/previews the original page)
+* Website (opens the original page)
 * Plain Text (highlights the relevant excerpt)
 * YouTube (jumps to the referenced timestamp)
 * VTT / Transcript (auto-scrolls to and highlights the cited transcript line, synced to its timestamp)
@@ -157,20 +181,13 @@ This ensures complete transparency and source attribution.
 
 # 🎓 AI Study Tools
 
-ChaiBookLM goes beyond question answering.
-
-Users can generate learning artifacts directly from their notebook.
+ChaiBookLM goes beyond question answering. Users can generate learning artifacts directly from their notebook. Artifacts are generated in the background, and the panel updates as soon as they are ready.
 
 ## 📄 AI Report
 
 Generate structured reports from notebook knowledge.
 
-Perfect for:
-
-* Revision
-* Documentation
-* Research Notes
-* Summaries
+Perfect for revision, documentation, research notes, and summaries.
 
 ---
 
@@ -184,7 +201,7 @@ Ideal for exam preparation.
 
 ## ❓ Quiz Generator
 
-Generate quizzes directly from uploaded sources.
+Generate multiple-choice quizzes directly from uploaded sources.
 
 Helps users test their understanding instead of simply reading.
 
@@ -192,11 +209,9 @@ Helps users test their understanding instead of simply reading.
 
 # 🌍 Shareable Artifacts
 
-One of the unique features of ChaiBookLM is artifact sharing.
-
 Generated Reports, Flashcards and Quizzes can be shared using a public URL.
 
-Recipients **do not need access to the notebook**.
+Recipients **do not need access to the notebook** or a guest token.
 
 Example:
 
@@ -211,30 +226,32 @@ This allows users to share generated study material while keeping their notebook
 # 🏗 Architecture
 
 ```
-                User (identified via anonymous cookie)
-                  │
-                  ▼
-            Next.js Frontend
-                  │
-                  ▼
-            API Route Handlers
-                  │
-        ┌─────────┴─────────┐
-        ▼                   ▼
-    MongoDB             OpenAI API
-        │                   │
-        ▼                   ▼
- Notebook Data        Embeddings / Chat
-        │
-        ▼
-     Qdrant
-(Vector Database)
-        │
-        ▼
- Relevant Chunks
-        │
-        ▼
-Grounded AI Response
+          Visitor (guest access token → signed session cookie)
+                          │
+                          ▼
+                   Next.js Frontend
+                          │
+                          ▼
+                 API Route Handlers
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+ PostgreSQL (Neon)    OpenAI API        Inngest
+   via Prisma            │          (background jobs)
+        │                ▼                 │
+ Notebooks, Sources,  Embeddings /         ▼
+ Messages, Artifacts  Chat           Source indexing,
+                                     Artifact generation
+                                           │
+                                           ▼
+                                        Qdrant
+                                  (Vector Database)
+                                           │
+                                           ▼
+                                    Relevant Chunks
+                                           │
+                                           ▼
+                                  Grounded AI Response
 ```
 
 ---
@@ -242,7 +259,7 @@ Grounded AI Response
 # 🔄 RAG Pipeline
 
 ```
-Upload Source
+Add Source (background job)
       │
       ▼
 Extract Text
@@ -260,8 +277,11 @@ Store in Qdrant
 User Question
       │
       ▼
-Multi-Query Rewriting
-(rewrite / step-back / HyDE / sub-queries)
+Query Rewriting + HyDE (parallel)
+(rewrite / step-back / sub-queries / hypothetical answer)
+      │
+      ▼
+Embed All Variants
       │
       ▼
 Parallel Similarity Search
@@ -276,10 +296,7 @@ Retrieve Context
 OpenAI (Streaming)
       │
       ▼
-Grounded Response
-      │
-      ▼
-Return Citations
+Grounded Response + Citations
 ```
 
 ---
@@ -301,14 +318,16 @@ Return Citations
 
 * Next.js Route Handlers
 * TypeScript
-* Cookie-based anonymous user identification (Next.js Middleware)
+* Zod validation
+* Signed, httpOnly session cookie with a proxy/middleware access gate
+* **Inngest** for background jobs (source indexing, artifact generation)
 
 ---
 
 ## Database
 
-* MongoDB
-* Mongoose
+* PostgreSQL on **Neon**
+* **Prisma** ORM
 
 ---
 
@@ -323,7 +342,7 @@ Return Citations
 * OpenAI API
 * Embeddings
 * Streaming Chat Completion
-* Multi-query retrieval (rewrite, step-back, HyDE, RRF fusion)
+* Multi-query retrieval (rewrite, step-back, sub-queries, HyDE, RRF fusion)
 
 ---
 
@@ -349,26 +368,29 @@ Return Citations
 src
 │
 ├── app
+│   ├── welcome          (landing page + access gate)
 │   ├── api
 │   ├── notebook
 │   ├── share
 │
 ├── components
-│   ├── dashboard
-│   ├── workspace
+│   ├── notebook
+│   │   ├── dashboard
+│   │   ├── workspace
 │   ├── ui
 │
 ├── services
 │
-├── models
+├── inngest              (background job definitions)
 │
 ├── validators
 │
-├── extractors
-│
 ├── lib
+│   ├── extractors
 │
-├── middleware.ts
+├── generated/prisma     (generated Prisma client)
+│
+├── middleware.ts        (access gate)
 │
 └── types
 ```
@@ -377,33 +399,42 @@ src
 
 # 📡 API
 
+Access APIs
+
+* Verify access token / start session
+* End session
+
 Notebook APIs
 
 * Create Notebook
-* List Notebooks (auto-clones demo notebooks on a visitor's first request)
+* List Notebooks
 * Rename Notebook
 * Delete Notebook
 
 Source APIs
 
-* Upload Source
+* Add Source (queues a background job)
+* List Sources (polled while processing)
 * Fetch Source Content (for transcript/VTT viewing)
 * Delete Source
 * Re-index Source
 
 Chat APIs
 
-* Streaming Chat
+* Streaming Chat (also handles regenerate)
 * Conversation History
 * Clear Conversation
 * AI-Suggested Questions
 
 Artifact APIs
 
-* Generate Report
-* Generate Flashcards
-* Generate Quiz
+* Generate Report / Flashcards / Quiz (queues a background job)
+* List Artifacts (polled while generating)
 * Share Artifact
+
+Background Jobs
+
+* `/api/inngest` serves the job functions to Inngest
 
 ---
 
@@ -413,6 +444,7 @@ Clone the repository
 
 ```bash
 git clone https://github.com/0xNotAyu/chai-book-lm.git
+cd chai-book-lm
 ```
 
 Install dependencies
@@ -421,46 +453,75 @@ Install dependencies
 npm install
 ```
 
-Run development server
+Set up the database
+
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+Run the development server
 
 ```bash
 npm run dev
 ```
 
+In a second terminal, run the Inngest dev server (background jobs need it)
+
+```bash
+npm run inngest
+```
+
+Then open `http://localhost:3000`. The Inngest dev dashboard runs at `http://localhost:8288`.
+
 ---
 
 # 🔐 Environment Variables
 
-Create a `.env.local`
+Create a `.env`
 
 ```env
-MONGO_URI=
+# Database (Neon PostgreSQL)
+DATABASE_URL=
 
+# AI
 OPENAI_API_KEY=
 OPENAI_BASE_URL=
 
+# Vector database
 QDRANT_CLUSTER_ENDPOINT=
 QDRANT_API_KEY=
 
+# File storage
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+
+# Guest access gate
+ACCESS_TOKENS=          # comma-separated list of valid guest tokens
+SESSION_SECRET=         # long random string used to sign the session cookie
+
+# Inngest
+INNGEST_DEV=1           # local development only
+INNGEST_EVENT_KEY=      # production only
+INNGEST_SIGNING_KEY=    # production only
 ```
 
 ---
 
 # 🚀 Deployment
 
-The application can be deployed on:
+The application is deployed on:
 
-* Vercel
-* MongoDB Atlas
-* Qdrant Cloud
-* Cloudinary
+* Vercel (app)
+* Neon (PostgreSQL)
+* Qdrant Cloud (vectors)
+* Inngest Cloud (background jobs)
+* Cloudinary (file storage)
 
 ---
 
-# 🎯 Assignment Features Covered
+# 🎯 Features Covered
 
 ## ✅ Notebook Management
 
@@ -468,8 +529,7 @@ The application can be deployed on:
 * Create
 * Rename
 * Delete
-* Isolation
-* Per-visitor demo notebooks (no login required)
+* Isolation per visitor
 
 ---
 
@@ -491,16 +551,19 @@ The application can be deployed on:
 * Embeddings
 * Vector Storage
 * Re-indexing
+* Background processing with live status
 
 ---
 
 ## ✅ AI Responses
 
 * Streaming
-* Multi-query RAG (rewrite / step-back / HyDE / RRF)
+* Multi-query RAG (rewrite / step-back / sub-queries / HyDE / RRF)
+* Live pipeline trace
 * Prompt Engineering
 * Minimal Hallucination
 * AI-generated suggested starter questions
+* Copy and regenerate
 
 ---
 
@@ -520,7 +583,7 @@ The application can be deployed on:
 * Service layer
 * Validation
 * Error handling
-* Atomic, race-condition-safe per-user demo cloning
+* Background jobs with retries and failure handling
 
 ---
 
@@ -530,14 +593,17 @@ The application can be deployed on:
 * Loading states
 * Empty states
 * Modern notebook experience
-* First-visit onboarding
+* Landing page with access gate
 * Clear chat control
 
 ---
 
 # 🔮 Future Improvements
 
-* Full authentication (accounts, not just anonymous cookies)
+* Full authentication (accounts, not just a guest access gate)
+* Usage quotas per user
+* Direct-to-Cloudinary uploads for large PDFs
+* Persisted pipeline traces in chat history
 * Collaborative notebooks
 * Podcast generation
 * Learning roadmaps
@@ -551,21 +617,20 @@ The application can be deployed on:
 
 # 💡 Engineering Decisions
 
-* Every notebook has its own isolated knowledge base.
-* Vector search is performed using Qdrant, scoped per-notebook.
+* Every notebook has its own isolated knowledge base, and vector search is scoped per notebook.
 * AI responses are always grounded using retrieved context.
-* Retrieval uses multi-query expansion (rewrite, step-back, HyDE) fused via RRF for higher recall/precision.
+* Retrieval uses multi-query expansion (rewrite, step-back, sub-queries, HyDE) fused via RRF for higher recall and precision.
+* The retrieval pipeline reports each stage as it runs, so its behavior is visible rather than a black box.
+* Source indexing and artifact generation run as Inngest background jobs, so requests return immediately, failures are retried, and a failed job marks the item as failed with a readable message.
+* Indexing is idempotent: old vectors are removed before re-indexing, so retries never duplicate chunks.
 * Artifacts are generated independently from conversations.
 * Shared artifacts are public while notebooks remain private.
-* Anonymous per-visitor identity (via cookie) lets everyone get their own isolated demo workspace without requiring signup.
-* Demo notebook cloning uses an atomic lock to guarantee exactly-once initialization, even under concurrent/rapid requests.
 * The application prioritizes retrieval quality over unrestricted generation to reduce hallucinations.
 
 ---
 
 # 🙏 Acknowledgements
 
-Built as part of the **GenAI with JS 2026** assignment.
 
 Inspired by **Google NotebookLM** and modern Retrieval-Augmented Generation (RAG) systems.
 
@@ -573,6 +638,10 @@ Inspired by **Google NotebookLM** and modern Retrieval-Augmented Generation (RAG
 
 # 👨‍💻 Author
 
-**Aayush**
+**Aayush Sharma**
+
+* 📧 [Aayush.sharma.0x@gmail.com](mailto:Aayush.sharma.0x@gmail.com)
+* 💼 [LinkedIn](https://linkedin.com/in/aayush-sharma-0x)
+* 🐙 [GitHub](https://github.com/0xNotAyu)
 
 If you found this project interesting, feel free to ⭐ the repository!
