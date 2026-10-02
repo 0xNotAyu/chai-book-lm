@@ -1,8 +1,7 @@
 // src/app/api/notebooks/[notebookId]/chat/route.ts
 import { NextResponse } from "next/server";
-import { streamChatAnswer } from "@/services/chat.service"
-import connectMongoDB from "@/lib/db";
-import { Notebook } from "@/models/Notebook.model";
+import { streamChatAnswer } from "@/services/chat.service";
+import prisma from "@/lib/db";
 
 type RouteParams = { params: Promise<{ notebookId: string }> };
 
@@ -49,20 +48,41 @@ export async function POST(req: Request, { params }: RouteParams) {
 export async function GET(_req: Request, { params }: RouteParams) {
   const { notebookId } = await params;
 
-  await connectMongoDB();
-  const notebook = await Notebook.findById(notebookId).lean();
+  const notebook = await prisma.notebook.findUnique({
+    where: { id: notebookId },
+    select: {
+      messages: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          role: true,
+          content: true,
+          citations: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
 
   if (!notebook) {
     return NextResponse.json({ error: "Notebook not found" }, { status: 404 });
   }
 
-  return NextResponse.json(notebook.conversations ?? []);
+  return NextResponse.json(notebook.messages);
 }
 
+// DELETE: clear the chat history (keeps the notebook itself).
 export async function DELETE(_req: Request, { params }: RouteParams) {
   const { notebookId } = await params;
-  await connectMongoDB();
-  const notebook = await Notebook.findByIdAndUpdate(notebookId, { $set: { conversations: [] } }, { new: true });
-  if (!notebook) return NextResponse.json({ error: "Notebook not found" }, { status: 404 });
+
+  const notebook = await prisma.notebook.findUnique({
+    where: { id: notebookId },
+    select: { id: true },
+  });
+  if (!notebook) {
+    return NextResponse.json({ error: "Notebook not found" }, { status: 404 });
+  }
+
+  await prisma.message.deleteMany({ where: { notebookId } });
   return NextResponse.json({ message: "Chat cleared" });
 }
