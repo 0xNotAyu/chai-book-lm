@@ -41,10 +41,19 @@ interface Citation {
   fileUrl: string | null;
 }
 
+type StageState = {
+  stage: string;
+  label: string;
+  status: "running" | "done";
+  detail?: string | string[];
+  ms?: number;
+};
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  stages?: StageState[];
 }
 
 export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorkspaceProps) {
@@ -61,13 +70,13 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-useEffect(() => {
-  if (!hasSources || messages.length > 0 || isLoadingHistory) return;
-  fetch(`/api/notebooks/${notebookId}/suggestions`)
-    .then((r) => r.json())
-    .then((d) => setSuggestions(d.questions ?? []))
-    .catch(() => {});
-}, [hasSources, messages.length, isLoadingHistory, notebookId]);
+  useEffect(() => {
+    if (!hasSources || messages.length > 0 || isLoadingHistory) return;
+    fetch(`/api/notebooks/${notebookId}/suggestions`)
+      .then((r) => r.json())
+      .then((d) => setSuggestions(d.questions ?? []))
+      .catch(() => {});
+  }, [hasSources, messages.length, isLoadingHistory, notebookId]);
 
   // Cheap heuristic instead of measuring the DOM — avoids ref conflicts since
   // this component's `chatPanel` JSX is mounted twice at once (main view +
@@ -83,10 +92,10 @@ useEffect(() => {
   }
 
   async function handleClearChat() {
-  if (!confirm("Clear this conversation? Your sources will stay.")) return;
-  await fetch(`/api/notebooks/${notebookId}/chat`, { method: "DELETE" });
-  setMessages([]);
-}
+    if (!confirm("Clear this conversation? Your sources will stay.")) return;
+    await fetch(`/api/notebooks/${notebookId}/chat`, { method: "DELETE" });
+    setMessages([]);
+  }
 
   const chatPanel = (
     <>
@@ -100,34 +109,39 @@ useEffect(() => {
             <Loader2 className="w-5 h-5 text-zinc-600 animate-spin" />
           </div>
         ) : messages.length === 0 ? (
-  <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center gap-4">
-    <p className="text-sm text-zinc-500">Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.</p>
-    {suggestions.length > 0 && (
-      <div className="flex flex-col gap-2 w-full max-w-sm">
-        <p className="text-xs text-zinc-600">Not sure what to ask? Choose something:</p>
-        {suggestions.map((q, i) => (
-          <button
-            key={i}
-            onClick={() => setInput(q)}
-            className="text-sm text-zinc-300 border border-zinc-800 rounded-full px-4 py-2 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-    )}
-  </div>
-): (
+          <div className="flex-1 flex flex-col items-center justify-center max-w-xl mx-auto text-center gap-4">
+            <p className="text-sm text-zinc-500">
+              Ask a question grounded in your {sourceCount} source{sourceCount === 1 ? "" : "s"}.
+            </p>
+            {suggestions.length > 0 && (
+              <div className="flex flex-col gap-2 w-full max-w-sm">
+                <p className="text-xs text-zinc-600">Not sure what to ask? Choose something:</p>
+                {suggestions.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(q)}
+                    className="text-sm text-zinc-300 border border-zinc-800 rounded-full px-4 py-2 hover:bg-zinc-800 hover:text-white transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
           <div className="w-full flex-1 flex flex-col gap-6 py-6">
             {messages.map((msg, i) => (
               <MessageBubble key={i} message={msg} onCitationClick={openCitation} />
             ))}
-            {isStreaming && messages[messages.length - 1]?.content === "" && (
-              <div className="flex items-center gap-2 text-zinc-500 text-sm">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Thinking...
-              </div>
-            )}
+            {/* Only shown in the brief gap before the first pipeline stage arrives */}
+            {isStreaming &&
+              messages[messages.length - 1]?.content === "" &&
+              !messages[messages.length - 1]?.stages?.length && (
+                <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Thinking...
+                </div>
+              )}
             <div ref={scrollRef} />
           </div>
         )}
@@ -157,7 +171,9 @@ useEffect(() => {
           )}
 
           <div className="flex items-center justify-between px-4 pb-3 pt-1">
-            <span className="text-xs text-zinc-600">{sourceCount} source{sourceCount === 1 ? "" : "s"}</span>
+            <span className="text-xs text-zinc-600">
+              {sourceCount} source{sourceCount === 1 ? "" : "s"}
+            </span>
             <Button
               size="icon"
               onClick={handleSend}
@@ -258,7 +274,26 @@ useEffect(() => {
           if (!line.trim()) continue;
           const event = JSON.parse(line);
 
-          if (event.type === "token") {
+          if (event.type === "stage") {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              const stages = last.stages ?? [];
+              const i = stages.findIndex((s) => s.stage === event.stage);
+              const merged: StageState = {
+                stage: event.stage,
+                label: event.label,
+                status: event.status,
+                detail: event.detail ?? stages[i]?.detail,
+                ms: event.ms ?? stages[i]?.ms,
+              };
+              next[next.length - 1] = {
+                ...last,
+                stages: i === -1 ? [...stages, merged] : stages.map((s, idx) => (idx === i ? merged : s)),
+              };
+              return next;
+            });
+          } else if (event.type === "token") {
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -317,16 +352,16 @@ useEffect(() => {
     <>
       <main className="flex-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden min-w-0">
         <div className="h-14 px-5 flex items-center justify-between shrink-0">
-  <h2 className="font-medium text-base text-zinc-200">Chat</h2>
-  {messages.length > 0 && (
-    <button
-      onClick={handleClearChat}
-      className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
-    >
-      Clear chat
-    </button>
-  )}
-</div>
+          <h2 className="font-medium text-base text-zinc-200">Chat</h2>
+          {messages.length > 0 && (
+            <button
+              onClick={handleClearChat}
+              className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+            >
+              Clear chat
+            </button>
+          )}
+        </div>
         {chatPanel}
       </main>
 
@@ -438,6 +473,7 @@ useEffect(() => {
     </>
   );
 }
+
 // Converts [n] markers into markdown link syntax so ReactMarkdown parses
 // them as nodes we can intercept and render as citation chips.
 function citationsToMarkdownLinks(content: string, citations?: Citation[]): string {
@@ -454,6 +490,7 @@ function citationsToMarkdownLinks(content: string, citations?: Citation[]): stri
     })
     .join("");
 }
+
 function splitCompleteAndPending(content: string) {
   const fenceCount = (content.match(/```/g) || []).length;
   if (fenceCount % 2 === 0) return { complete: content, pending: "" };
@@ -490,6 +527,59 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
   );
 }
 
+// Live trace of the RAG pipeline for one answer: rewriting, HyDE, embedding,
+// search, RRF fusion, generation. Open while running, folds away when done.
+function PipelineTrace({ stages }: { stages: StageState[] }) {
+  const finished = stages.length > 0 && stages.every((s) => s.status === "done");
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (finished) setOpen(false);
+  }, [finished]);
+
+  return (
+    <div className="mb-3 rounded-xl border border-zinc-800 bg-zinc-900/50">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+      >
+        <ChevronRight className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
+        {finished ? `RAG pipeline · ${stages.length} steps` : "Running RAG pipeline…"}
+      </button>
+
+      {open && (
+        <ol className="px-3 pb-3 space-y-2.5 text-xs">
+          {stages.map((s) => (
+            <li key={s.stage} className="flex gap-2">
+              <span className="mt-0.5 shrink-0">
+                {s.status === "running" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                ) : (
+                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                )}
+              </span>
+              <div className="min-w-0">
+                <p className="text-zinc-300">
+                  {s.label}
+                  {s.ms != null && <span className="ml-2 text-zinc-500">{s.ms} ms</span>}
+                </p>
+                {s.detail && (
+                  <div className="mt-1 space-y-0.5 text-zinc-500 break-words">
+                    {(Array.isArray(s.detail) ? s.detail : [s.detail]).map((d, i) => (
+                      <p key={i}>{d}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   onCitationClick,
@@ -516,6 +606,10 @@ function MessageBubble({
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] w-full">
+        {message.stages && message.stages.length > 0 && (
+          <PipelineTrace stages={message.stages} />
+        )}
+
         <div className="prose prose-invert prose-sm max-w-none text-zinc-200 leading-relaxed">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}

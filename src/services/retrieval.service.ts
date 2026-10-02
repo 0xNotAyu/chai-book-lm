@@ -7,8 +7,37 @@ interface QueryVariants {
   subQueries: string[];
 }
 
+// ---- Pipeline progress reporting ------------------------------------------
+export type PipelineStage = "rewrite" | "hyde" | "embed" | "search" | "fusion" | "generate";
+
+export interface StageEvent {
+  stage: PipelineStage;
+  status: "running" | "done";
+  label: string;
+  detail?: string | string[];
+  ms?: number;
+}
+export type StageReporter = (e: StageEvent) => void;
+
+async function runStage<T>(
+  onStage: StageReporter | undefined,
+  stage: PipelineStage,
+  label: string,
+  fn: () => Promise<T>,
+  summarize?: (result: T) => string | string[]
+): Promise<T> {
+  onStage?.({ stage, status: "running", label });
+  const t = Date.now();
+  const result = await fn();
+  onStage?.({ stage, status: "done", label, detail: summarize?.(result), ms: Date.now() - t });
+  return result;
+}
+
+const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n).trim()}…` : s);
+// ----------------------------------------------------------------------------
+
 const RRF_K = 60;
-const FINAL_K = 35;          
+const FINAL_K = 35;
 const PER_QUERY_LIMIT = 20;
 
 /** Rewrite the user's query into step-back, cleaned-up, and 3 sub-question variants. */
@@ -121,16 +150,34 @@ function reciprocalRankFusion(
  * Full multi-query retrieval: rewrite the query into variants (typo-fixed,
  * step-back, HyDE hypothetical doc, 3 sub-queries), embed + search all of
  * them in parallel, fuse with RRF, return the top FINAL_K chunks.
+ * Reports each stage through `onStage` so the UI can show the pipeline live.
  */
 export async function retrieveChunksAdvanced(params: {
   notebookId: string;
   query: string;
+  onStage?: StageReporter;
 }): Promise<RetrievedChunk[]> {
-  const { notebookId, query } = params;
+  const { notebookId, query, onStage } = params;
 
   const [{ stepBack, rewritten, subQueries }, hyde] = await Promise.all([
-    queryRewriting(query),
-    hydeDocument(query),
+    runStage(
+      onStage,
+      "rewrite",
+      "Query rewriting: clean-up, step-back and sub-query decomposition",
+      () => queryRewriting(query),
+      (v) => [
+        `Rewritten: ${v.rewritten}`,
+        `Step-back: ${v.stepBack}`,
+        ...v.subQueries.map((q, i) => `Sub-query ${i + 1}: ${q}`),
+      ]
+    ),
+    runStage(
+      onStage,
+      "hyde",
+      "HyDE: writing a hypothetical answer to search with",
+      () => hydeDocument(query),
+      (h) => truncate(h, 280)
+    ),
   ]);
 
   const labelled = [
@@ -140,16 +187,41 @@ export async function retrieveChunksAdvanced(params: {
     ...subQueries.map((q, i) => ({ label: `subQuery${i + 1}`, text: q })),
   ].filter((v) => v.text && v.text.trim().length > 0);
 
-  const vectors = await vectorService.embedQueries(labelled.map((v) => v.text));
+  const vectors = await runStage(
+    onStage,
+    "embed",
+    `Embedding ${labelled.length} query variants`,
+    () => vectorService.embedQueries(labelled.map((v) => v.text)),
+    (vs) => `${vs.length} vectors created`
+  );
 
-  const resultsPerQuery = await Promise.all(
-    vectors.map((vector) =>
-      vectorService.searchByEmbedding({ notebookId, vector, limit: PER_QUERY_LIMIT })
-    )
+  const resultsPerQuery = await runStage(
+    onStage,
+    "search",
+    `Searching the vector store with ${labelled.length} queries in parallel`,
+    () =>
+      Promise.all(
+        vectors.map((vector) =>
+          vectorService.searchByEmbedding({ notebookId, vector, limit: PER_QUERY_LIMIT })
+        )
+      ),
+    (lists) =>
+      `${lists.reduce((n, l) => n + l.length, 0)} candidate chunks (up to ${PER_QUERY_LIMIT} per query)`
   );
 
   const rankedLists = labelled.map((v, i) => ({ label: v.label, hits: resultsPerQuery[i] }));
-  const fused = reciprocalRankFusion(rankedLists);
+
+  const fused = await runStage(
+    onStage,
+    "fusion",
+    "Merging results with Reciprocal Rank Fusion (RRF)",
+    async () => reciprocalRankFusion(rankedLists),
+    (f) => [
+      `${f.length} unique passages after de-duplication`,
+      `${f.filter((c) => c.matchedBy.length > 1).length} matched by 2+ query variants`,
+      `Keeping the top ${Math.min(FINAL_K, f.length)}`,
+    ]
+  );
 
   return fused.slice(0, FINAL_K);
 }

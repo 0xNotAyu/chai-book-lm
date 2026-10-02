@@ -1,8 +1,9 @@
 import  prisma from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { openai, CHAT_MODEL } from "@/lib/openai";
-import { retrieveChunksAdvanced } from "@/services/retrieval.service";
+import { retrieveChunksAdvanced, StageEvent } from "@/services/retrieval.service";
 import type { RetrievedChunk } from "@/services/vector.service";
+
 
 
 
@@ -20,10 +21,13 @@ export interface ChatCitation {
 }
 
 export type ChatStreamEvent =
+  | ({ type: "stage" } & StageEvent)
   | { type: "token"; content: string }
   | { type: "citations"; sources: ChatCitation[] }
   | { type: "error"; message: string };
 
+
+  
 function buildSystemPrompt(chunks: RetrievedChunk[]): string {
   const context = chunks
     .map((c, i) => `[${i + 1}] (Source: "${c.sourceTitle}")\n${c.text}`)
@@ -50,36 +54,71 @@ function buildSystemPrompt(chunks: RetrievedChunk[]): string {
     context || "(No relevant sources were found for this question.)",
   ].join("\n");
 }
-
-/**
- * Runs the full RAG pipeline for one question and yields streaming events:
- * token-by-token answer text, then a final citations payload. Also persists
- * both the user question and the completed answer to the notebook's
- * conversation history in MongoDB.
- */
 export async function* streamChatAnswer(params: {
   notebookId: string;
   question: string;
 }): AsyncGenerator<ChatStreamEvent> {
-    const { notebookId, question } = params;
+  const { notebookId, question } = params;
 
-  // Persist the user's message immediately, before generation starts.
   await prisma.message.create({
     data: { notebookId, role: "user", content: question },
   });
 
+  let fullAnswer = "";
+  let citations: ChatCitation[] = [];
+  let saved = false;
+
+  const saveAssistantMessage = async () => {
+    saved = true; // set first so a failed save can't trigger a second attempt
+    await prisma.message.create({
+      data: {
+        notebookId,
+        role: "assistant",
+        content: fullAnswer,
+        citations: citations as unknown as Prisma.InputJsonValue,
+      },
+    });
+  };
 
   try {
-    // 1. Retrieve relevant chunks, scoped to this notebook only.
-    const chunks = await retrieveChunksAdvanced({ notebookId, query: question });
+    // 1. Retrieval with live progress. The retriever reports through a callback,
+    // but a generator can only yield from its own body, so events go into a
+    // queue that we drain here while retrieval runs.
+    const queue: ChatStreamEvent[] = [];
+    let wake: (() => void) | null = null;
+    const state: { done: boolean; chunks?: RetrievedChunk[]; error?: unknown } = { done: false };
+
+    retrieveChunksAdvanced({
+      notebookId,
+      query: question,
+      onStage: (e) => {
+        queue.push({ type: "stage", ...e });
+        wake?.();
+        wake = null;
+      },
+    })
+      .then(
+        (chunks) => { state.chunks = chunks; },
+        (error) => { state.error = error; }
+      )
+      .finally(() => {
+        state.done = true;
+        wake?.();
+        wake = null;
+      });
+
+    while (true) {
+      while (queue.length) yield queue.shift()!;
+      if (state.done) break;
+      await new Promise<void>((resolve) => { wake = resolve; });
+    }
+    if (state.error) throw state.error;
+    const chunks = state.chunks ?? [];
 
     console.log(`\n[RAG DEBUG] notebookId=${notebookId} query="${question}"`);
-console.log(`[RAG DEBUG] retrieved ${chunks.length} chunks:`);
-chunks.forEach((c) => {
-  console.log(`  score=${c.score.toFixed(3)} | ${c.sourceTitle} | "${c.text.slice(0, 100)}..."`);
-});
+    console.log(`[RAG DEBUG] retrieved ${chunks.length} chunks`);
 
-    const citations: ChatCitation[] = chunks.map((c, i) => ({
+    citations = chunks.map((c, i) => ({
       index: i + 1,
       sourceId: c.sourceId,
       sourceType: c.sourceType,
@@ -92,7 +131,11 @@ chunks.forEach((c) => {
       endSeconds: c.endSeconds,
     }));
 
-    // 2. Stream the grounded answer from the LLM.
+    // 2. Generation
+    const genStart = Date.now();
+    const genLabel = `Writing a cited answer from ${chunks.length} passages`;
+    yield { type: "stage", stage: "generate", status: "running", label: genLabel };
+
     const stream = await openai.chat.completions.create({
       model: CHAT_MODEL,
       stream: true,
@@ -102,8 +145,6 @@ chunks.forEach((c) => {
       ],
     });
 
-    let fullAnswer = "";
-
     for await (const part of stream) {
       const delta = part.choices[0]?.delta?.content ?? "";
       if (delta) {
@@ -112,22 +153,22 @@ chunks.forEach((c) => {
       }
     }
 
-        // 3. Send citation metadata once the answer text is fully streamed, so
-    // the client can render clickable [n] chips against the final text.
+    yield { type: "stage", stage: "generate", status: "done", label: genLabel, ms: Date.now() - genStart };
     yield { type: "citations", sources: citations };
 
-    // 4. Persist the completed assistant answer.
-    await prisma.message.create({
-      data: {
-        notebookId,
-        role: "assistant",
-        content: fullAnswer,
-        citations: citations as unknown as Prisma.InputJsonValue,
-      },
-    });
+    await saveAssistantMessage();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate an answer";
     console.error("Chat generation failed:", message);
     yield { type: "error", message };
+  } finally {
+    // Runs on success, on error, and when the client disconnects mid-stream
+    // (the consumer stops iterating, which calls the generator's return()).
+    // Whatever was written so far is kept, along with its citations.
+    if (!saved && fullAnswer.trim()) {
+      await saveAssistantMessage().catch((err) =>
+        console.error("Failed to save partial answer:", err)
+      );
+    }
   }
 }
