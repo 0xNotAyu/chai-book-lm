@@ -1,5 +1,6 @@
-import connectMongoDB from "@/lib/mongodb";
-import { Artifact, type ArtifactType } from "@/models/Artifact.model";
+import  prisma from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import type { ArtifactType } from "@/generated/prisma/enums";
 import { openai, CHAT_MODEL } from "@/lib/openai";
 import { vectorService } from "@/services/vector.service";
 
@@ -21,7 +22,7 @@ async function buildContext(notebookId: string): Promise<string> {
   return context;
 }
 
-async function generateReport(notebookId: string, notebookTitle: string) {
+export async function generateReport(notebookId: string, notebookTitle: string) {
   const context = await buildContext(notebookId);
 
   const completion = await openai.chat.completions.create({
@@ -49,7 +50,7 @@ async function generateReport(notebookId: string, notebookTitle: string) {
   return { markdown };
 }
 
-async function generateFlashcards(notebookId: string, notebookTitle: string) {
+export async function generateFlashcards(notebookId: string, notebookTitle: string) {
   const context = await buildContext(notebookId);
 
   const completion = await openai.chat.completions.create({
@@ -105,7 +106,7 @@ async function generateFlashcards(notebookId: string, notebookTitle: string) {
   return { cards: parsed.cards };
 }
 
-async function generateQuiz(notebookId: string, notebookTitle: string) {
+export async function generateQuiz(notebookId: string, notebookTitle: string) {
   const context = await buildContext(notebookId);
 
   const completion = await openai.chat.completions.create({
@@ -176,48 +177,47 @@ async function generateQuiz(notebookId: string, notebookTitle: string) {
 
 class ArtifactService {
   async generate(notebookId: string, notebookTitle: string, type: ArtifactType) {
-    await connectMongoDB();
-
-    const artifactDoc = await Artifact.create({
-      notebookId,
-      type,
-      title: `${notebookTitle} — ${type[0].toUpperCase()}${type.slice(1)}`,
-      status: "generating",
-      content: null,
+    const artifact = await prisma.artifact.create({
+      data: {
+        notebookId,
+        type,
+        title: `${notebookTitle} — ${type[0].toUpperCase()}${type.slice(1)}`,
+        status: "generating",
+      },
     });
 
     try {
-      let content;
+      let content: Prisma.InputJsonValue;
       if (type === "report") content = await generateReport(notebookId, notebookTitle);
       else if (type === "flashcards") content = await generateFlashcards(notebookId, notebookTitle);
       else content = await generateQuiz(notebookId, notebookTitle);
 
-      artifactDoc.content = content;
-      artifactDoc.status = "completed";
-      await artifactDoc.save();
+      return await prisma.artifact.update({
+        where: { id: artifact.id },
+        data: { content, status: "completed" },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to generate artifact";
-      artifactDoc.status = "failed";
-      artifactDoc.errorMessage = message;
-      await artifactDoc.save();
+      return await prisma.artifact.update({
+        where: { id: artifact.id },
+        data: { status: "failed", errorMessage: message },
+      });
     }
-
-    return artifactDoc;
   }
 
   async getById(id: string) {
-    await connectMongoDB();
-    return await Artifact.findById(id);
+    return prisma.artifact.findUnique({ where: { id } });
   }
 
   async listByNotebook(notebookId: string) {
-    await connectMongoDB();
-    return await Artifact.find({ notebookId }).sort({ createdAt: -1 });
+    return prisma.artifact.findMany({
+      where: { notebookId },
+      orderBy: { createdAt: "desc" },
+    });
   }
 
   async delete(id: string) {
-    await connectMongoDB();
-    return await Artifact.findByIdAndDelete(id);
+    return prisma.artifact.delete({ where: { id } });
   }
 }
 

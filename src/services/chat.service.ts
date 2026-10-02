@@ -1,8 +1,9 @@
-import connectMongoDB from "@/lib/mongodb";
-import { Notebook } from "@/models/Notebook.model";
+import  prisma from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { openai, CHAT_MODEL } from "@/lib/openai";
 import { retrieveChunksAdvanced } from "@/services/retrieval.service";
-import type { RetrievedChunk } from "@/services/vector.service"
+import type { RetrievedChunk } from "@/services/vector.service";
+
 
 
 export interface ChatCitation {
@@ -60,14 +61,13 @@ export async function* streamChatAnswer(params: {
   notebookId: string;
   question: string;
 }): AsyncGenerator<ChatStreamEvent> {
-  const { notebookId, question } = params;
-
-  await connectMongoDB();
+    const { notebookId, question } = params;
 
   // Persist the user's message immediately, before generation starts.
-  await Notebook.findByIdAndUpdate(notebookId, {
-    $push: { conversations: { role: "user", content: question } },
+  await prisma.message.create({
+    data: { notebookId, role: "user", content: question },
   });
+
 
   try {
     // 1. Retrieve relevant chunks, scoped to this notebook only.
@@ -112,13 +112,18 @@ chunks.forEach((c) => {
       }
     }
 
-    // 3. Send citation metadata once the answer text is fully streamed, so
+        // 3. Send citation metadata once the answer text is fully streamed, so
     // the client can render clickable [n] chips against the final text.
     yield { type: "citations", sources: citations };
 
     // 4. Persist the completed assistant answer.
-    await Notebook.findByIdAndUpdate(notebookId, {
-      $push: { conversations: { role: "assistant", content: fullAnswer , citations} },
+    await prisma.message.create({
+      data: {
+        notebookId,
+        role: "assistant",
+        content: fullAnswer,
+        citations: citations as unknown as Prisma.InputJsonValue,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate an answer";

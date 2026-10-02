@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 
 import { qdrant } from "@/lib/qdrant";
-import connectMongoDB from "@/lib/mongodb";
+import connectMongoDB from "@/lib/db";
 
 export async function GET() {
   try {

@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SourceType {
+  pdf
+  youtube
+  website
+  text
+  vtt
+}
+
+enum SourceStatus {
+  processing
+  completed
+  failed
+}
+
+enum ArtifactType {
+  report
+  flashcards
+  quiz
+}
+
+enum ArtifactStatus {
+  generating
+  completed
+  failed
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+enum UserInitStatus {
+  pending
+  done
+}
+
+model Notebook {
+  id          String   @id @default(cuid())
+  title       String
+  emoji       String   @default("📙")
+  description String   @default("")
+  userId      String?
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages  Message[]
+  sources   Source[]
+  artifacts Artifact[]
+
+  @@index([userId])
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  notebookId String
+  role       MessageRole
+  content    String
+  citations  Json?       // array of { index, sourceId, sourceType, title, snippet, url, page, startSeconds, endSeconds, fileUrl }
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  notebook Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+
+  @@index([notebookId, createdAt])
+}
+
+model Source {
+  id                 String       @id @default(cuid())
+  notebookId         String
+  title              String
+  sourceType         SourceType
+  url                String?
+  fileName           String?
+  status             SourceStatus @default(processing)
+  errorMessage       String?
+  chunkCount         Int          @default(0)
+  fileUrl            String?
+  cloudinaryPublicId String?      // never expose to client
+  extractedText      String?      // large; select explicitly only for re-index
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  notebook Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+
+  @@index([notebookId])
+}
+
+model Artifact {
+  id           String         @id @default(cuid())
+  notebookId   String
+  type         ArtifactType
+  title        String
+  status       ArtifactStatus @default(generating)
+  errorMessage String?
+  content      Json?          // report: {markdown} | flashcards: {cards[]} | quiz: {questions[]}
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  notebook Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+
+  @@index([notebookId, createdAt(sort: Desc)])
+}
+
+model UserInit {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  status    UserInitStatus @default(pending)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}

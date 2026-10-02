@@ -7,10 +7,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@qdrant/js-client-rest": "^1.18.0",
     "@qdrant/qdrant-js": "^1.18.0",
     "cheerio": "^1.2.0",
@@ -21,13 +24,12 @@
     "dotenv": "^17.4.2",
     "emoji-picker-react": "^4.19.1",
     "lucide-react": "^1.26.0",
-    "mongodb": "^7.5.0",
-    "mongoose": "^9.8.0",
     "next": "16.2.11",
     "next-themes": "^0.4.6",
     "node-webvtt": "^1.9.4",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
@@ -49,6 +51,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

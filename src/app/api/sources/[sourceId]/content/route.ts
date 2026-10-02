@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sourceService } from "@/services/source.services";
+import { sourceService } from "@/services/source.service";
 
 type RouteParams = { params: Promise<{ sourceId: string }> };
 

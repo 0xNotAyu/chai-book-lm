@@ -1,6 +1,6 @@
 // src/app/api/notebooks/[notebookId]/sources/[sourceId]/route.ts
 import { NextResponse } from "next/server";
-import { sourceService } from "@/services/source.services";
+import { sourceService } from "@/services/source.service";
 
 type RouteParams = {
   params: Promise<{ notebookId: string; sourceId: string }>;

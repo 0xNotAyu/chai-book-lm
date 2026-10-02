@@ -3,7 +3,7 @@ import { PanelLeftClose } from "lucide-react";
 import { ChatWorkspace } from "@/components/notebook/workspace/ChatWorkspace";
 import { SourcesPanel } from "@/components/notebook/workspace/SourcesPanel";
 import { StudioBar } from "@/components/notebook/workspace/StudioBar";
-import { sourceService } from "@/services/source.services";
+import { sourceService } from "@/services/source.service";
 import { notebookService } from "@/services/notebook.service";
 import { Button } from "@/components/ui/button";
 

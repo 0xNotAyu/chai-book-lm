@@ -1,6 +1,6 @@
 // src/app/api/notebooks/[notebookId]/sources/route.ts
 import { NextResponse } from "next/server";
-import { sourceService } from "@/services/source.services";
+import { sourceService } from "@/services/source.service";
 import { createSourceSchema } from "@/validators/source.schema";
 import { z } from "zod";
 

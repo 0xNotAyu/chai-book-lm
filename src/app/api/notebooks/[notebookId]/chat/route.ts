@@ -1,7 +1,7 @@
 // src/app/api/notebooks/[notebookId]/chat/route.ts
 import { NextResponse } from "next/server";
 import { streamChatAnswer } from "@/services/chat.service"
-import connectMongoDB from "@/lib/mongodb";
+import connectMongoDB from "@/lib/db";
 import { Notebook } from "@/models/Notebook.model";
 
 type RouteParams = { params: Promise<{ notebookId: string }> };
