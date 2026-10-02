@@ -10,19 +10,18 @@ Upload multiple knowledge sources, chat with your documents using Retrieval-Augm
 
 > **https://chai-book-lm-seven.vercel.app**
 
-The app is behind a guest access gate. To try it, open the link, click **Try the app**, and enter a guest access token. Don't have one? See [Getting Access](#-getting-access).
 
 ---
-
+<!-- 
 ## 🎥 Demo Video
 
 > 📺 [**Watch the demo video here**](PASTE_DEMO_VIDEO_LINK_HERE)
 
----
+--- -->
 
 ## 🔑 Getting Access
 
-ChaiBookLM calls paid APIs (LLM, embeddings, vector storage), so the live app is open to guests with an access token instead of being fully public.
+ChaiBookLM is a Demo Project
 
 * Open the live link and click **Try the app**
 * No tokens? Contact me:
@@ -226,7 +225,7 @@ This allows users to share generated study material while keeping their notebook
 # 🏗 Architecture
 
 ```
-          Visitor (guest access token → signed session cookie)
+                        User
                           │
                           ▼
                    Next.js Frontend
@@ -399,10 +398,6 @@ src
 
 # 📡 API
 
-Access APIs
-
-* Verify access token / start session
-* End session
 
 Notebook APIs
 
