@@ -1,11 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PanelLeftClose } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { ChatWorkspace } from "@/components/notebook/workspace/ChatWorkspace";
 import { SourcesPanel } from "@/components/notebook/workspace/SourcesPanel";
 import { StudioBar } from "@/components/notebook/workspace/StudioBar";
 import { sourceService } from "@/services/source.service";
 import { notebookService } from "@/services/notebook.service";
-import { Button } from "@/components/ui/button";
 
 interface NotebookPageProps {
   params: Promise<{ id: string }>;
@@ -31,6 +31,14 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden">
       <header className="h-16 flex items-center justify-between px-5 shrink-0 z-20">
         <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            title="Back to notebooks"
+            aria-label="Back to notebooks"
+            className="h-9 w-9 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
           <span>{notebook.emoji || "📙"}</span>
           <span className="text-lg font-medium text-zinc-200">{notebook.title || "Untitled notebook"}</span>
         </div>
@@ -42,7 +50,6 @@ export default async function NotebookPage({ params }: NotebookPageProps) {
         <aside className="w-[300px] shrink-0 bg-zinc-900/60 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden">
           <div className="h-14 px-5 flex items-center justify-between shrink-0">
             <h2 className="font-medium text-base text-zinc-200">Sources</h2>
-            
           </div>
 
           <SourcesPanel notebookId={id} initialSources={sources} />
