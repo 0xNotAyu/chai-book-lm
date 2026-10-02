@@ -23,17 +23,19 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      try {
-        for await (const event of streamChatAnswer({ notebookId, question })) {
-          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Stream failed";
-        controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message }) + "\n"));
-      } finally {
-        controller.close();
-      }
-    },
+  const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+  try {
+    for await (const event of streamChatAnswer({ notebookId, question })) {
+      send(event); // throws if the client is gone, which exits the loop,
+    }              // calls the generator's return(), and runs its `finally`
+  } catch (err) {
+    try {
+      send({ type: "error", message: err instanceof Error ? err.message : "Stream failed" });
+    } catch {}
+  } finally {
+    try { controller.close(); } catch {}
+  }
+},
   });
 
   return new Response(stream, {
