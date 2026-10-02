@@ -49,7 +49,6 @@ model Notebook {
   emoji       String   @default("📙")
   description String   @default("")
   userId      String?
-  isDemo      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
