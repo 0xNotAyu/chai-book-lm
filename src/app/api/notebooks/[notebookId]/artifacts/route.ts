@@ -7,7 +7,14 @@ import { z } from "zod";
 type RouteParams = { params: Promise<{ notebookId: string }> };
 
 export async function GET(_req: Request, { params }: RouteParams) {
-  // unchanged
+  try {
+    const { notebookId } = await params;
+    const artifacts = await artifactService.listByNotebook(notebookId);
+    return NextResponse.json(artifacts);
+  } catch (error) {
+    console.error("Error fetching artifacts:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
