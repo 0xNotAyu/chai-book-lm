@@ -54,15 +54,34 @@ function buildSystemPrompt(chunks: RetrievedChunk[]): string {
     context || "(No relevant sources were found for this question.)",
   ].join("\n");
 }
+
 export async function* streamChatAnswer(params: {
   notebookId: string;
-  question: string;
+  question?: string;
+  regenerate?: boolean;
 }): AsyncGenerator<ChatStreamEvent> {
-  const { notebookId, question } = params;
+  const { notebookId, regenerate } = params;
+  let question = params.question ?? "";
 
-  await prisma.message.create({
-    data: { notebookId, role: "user", content: question },
-  });
+  if (regenerate) {
+    // Retry: reuse the last user question and drop the answer(s) after it
+    const lastUser = await prisma.message.findFirst({
+      where: { notebookId, role: "user" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!lastUser) {
+      yield { type: "error", message: "Nothing to regenerate" };
+      return;
+    }
+    question = lastUser.content;
+    await prisma.message.deleteMany({
+      where: { notebookId, role: "assistant", createdAt: { gt: lastUser.createdAt } },
+    });
+  } else {
+    await prisma.message.create({
+      data: { notebookId, role: "user", content: question },
+    });
+  }
 
   let fullAnswer = "";
   let citations: ChatCitation[] = [];

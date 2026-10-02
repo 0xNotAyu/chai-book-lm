@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, RefreshCw, MoreHorizontal } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Check, Copy as CopyIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -131,7 +131,17 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
         ) : (
           <div className="w-full flex-1 flex flex-col gap-6 py-6">
             {messages.map((msg, i) => (
-              <MessageBubble key={i} message={msg} onCitationClick={openCitation} />
+              <MessageBubble
+                key={i}
+                message={msg}
+                onCitationClick={openCitation}
+                // Retry is only offered on the last answer, and never mid-stream
+                onRetry={
+                  msg.role === "assistant" && i === messages.length - 1 && !isStreaming
+                    ? handleRetry
+                    : undefined
+                }
+              />
             ))}
             {/* Only shown in the brief gap before the first pipeline stage arrives */}
             {isStreaming &&
@@ -235,28 +245,22 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isInputExpanded]);
 
-  async function handleSend() {
-    const question = input.trim();
-    if (!question || isStreaming) return;
-
-    setInput("");
+  // Streams one answer into the LAST message in the list (an empty assistant
+  // placeholder). Shared by a normal send and by retry/regenerate.
+  async function streamAnswer(body: { question?: string; regenerate?: boolean }) {
     setIsStreaming(true);
-
-    // Optimistically add the user message + a placeholder assistant message.
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: question },
-      { role: "assistant", content: "" },
-    ]);
 
     try {
       const res = await fetch(`/api/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify(body),
       });
 
-      if (!res.body) throw new Error("No response stream");
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "No response stream");
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -333,6 +337,32 @@ export function ChatWorkspace({ notebookId, hasSources, sourceCount }: ChatWorks
     } finally {
       setIsStreaming(false);
     }
+  }
+
+  async function handleSend() {
+    const question = input.trim();
+    if (!question || isStreaming) return;
+
+    setInput("");
+
+    // Optimistically add the user message + a placeholder assistant message.
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: question },
+      { role: "assistant", content: "" },
+    ]);
+
+    await streamAnswer({ question });
+  }
+
+  async function handleRetry() {
+    if (isStreaming) return;
+    if (messages[messages.length - 1]?.role !== "assistant") return;
+
+    // Reset the last answer to an empty placeholder; the new one streams into
+    // it. The server finds the last saved question and replaces the old answer.
+    setMessages((prev) => [...prev.slice(0, -1), { role: "assistant", content: "" }]);
+    await streamAnswer({ regenerate: true });
   }
 
   function openCitation(c: Citation) {
@@ -583,14 +613,19 @@ function PipelineTrace({ stages }: { stages: StageState[] }) {
 function MessageBubble({
   message,
   onCitationClick,
+  onRetry,
 }: {
   message: ChatMessage;
   onCitationClick: (c: Citation) => void;
+  onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   if (isUser) {
@@ -699,21 +734,24 @@ function MessageBubble({
               onClick={handleCopy}
               className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
               aria-label="Copy response"
+              title={copied ? "Copied" : "Copy"}
             >
-              <Copy className="w-3.5 h-3.5" />
+              {copied ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
             </button>
-            <button
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
-              aria-label="Regenerate response"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
-              aria-label="More options"
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-            </button>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                aria-label="Regenerate response"
+                title="Regenerate"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
       </div>

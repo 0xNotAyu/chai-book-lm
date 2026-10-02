@@ -5,8 +5,10 @@ import prisma from "@/lib/db";
 
 type RouteParams = { params: Promise<{ notebookId: string }> };
 
-// POST: ask a question, stream back the grounded answer + citations.
+// POST: ask a question (or regenerate the last answer), stream back the
+// grounded answer + citations.
 // Response body is newline-delimited JSON (NDJSON), one event per line:
+//   {"type":"stage","stage":"rewrite","status":"running","label":"..."}
 //   {"type":"token","content":"..."}
 //   {"type":"citations","sources":[...]}
 //   {"type":"error","message":"..."}
@@ -14,8 +16,10 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { notebookId } = await params;
   const body = await req.json().catch(() => ({}));
   const question: string | undefined = body?.question;
+  const regenerate = body?.regenerate === true;
 
-  if (!question || !question.trim()) {
+  // A regenerate request reuses the last saved question, so it needs no body text
+  if (!regenerate && (!question || !question.trim())) {
     return NextResponse.json({ error: "Question is required" }, { status: 400 });
   }
 
@@ -23,20 +27,20 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const stream = new ReadableStream({
     async start(controller) {
-  const send = (obj: unknown) =>
-    controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
-  try {
-    for await (const event of streamChatAnswer({ notebookId, question })) {
-      send(event); // throws if the client is gone, which exits the loop and
-    }              // triggers the generator's `finally` (partial save)
-  } catch (err) {
-    try {
-      send({ type: "error", message: err instanceof Error ? err.message : "Stream failed" });
-    } catch {}
-  } finally {
-    try { controller.close(); } catch {}
-  }
-},
+      const send = (obj: unknown) =>
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      try {
+        for await (const event of streamChatAnswer({ notebookId, question, regenerate })) {
+          send(event); // throws if the client is gone, which exits the loop and
+        }              // triggers the generator's `finally` (partial save)
+      } catch (err) {
+        try {
+          send({ type: "error", message: err instanceof Error ? err.message : "Stream failed" });
+        } catch {}
+      } finally {
+        try { controller.close(); } catch {}
+      }
+    },
   });
 
   return new Response(stream, {
