@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { sourceService } from "@/services/source.service";
 import { createSourceSchema } from "@/validators/source.schema";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 
 type RouteParams = { params: Promise<{ notebookId: string }> };
 
@@ -106,9 +107,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
-  } catch (error) {
+ } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation Error", details: error.issues }, { status: 400 });
+    }
+    // Notebook id doesn't exist (foreign key violation)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return NextResponse.json({ error: "Notebook not found" }, { status: 404 });
     }
     console.error("Error creating source:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

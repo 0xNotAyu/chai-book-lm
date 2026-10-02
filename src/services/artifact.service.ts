@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { ArtifactType } from "@/generated/prisma/enums";
 import { openai, CHAT_MODEL } from "@/lib/openai";
 import { vectorService } from "@/services/vector.service";
+import { inngest } from "@/inngest/client";
 
 const MAX_CONTEXT_CHUNKS = 80;
 const MAX_CONTEXT_CHARS = 24000; // keeps the prompt a sane size regardless of notebook size
@@ -176,34 +177,23 @@ export async function generateQuiz(notebookId: string, notebookTitle: string) {
 }
 
 class ArtifactService {
-  async generate(notebookId: string, notebookTitle: string, type: ArtifactType) {
-    const artifact = await prisma.artifact.create({
-      data: {
-        notebookId,
-        type,
-        title: `${notebookTitle} — ${type[0].toUpperCase()}${type.slice(1)}`,
-        status: "generating",
-      },
-    });
+async generate(notebookId: string, notebookTitle: string, type: ArtifactType) {
+  const artifact = await prisma.artifact.create({
+    data: {
+      notebookId,
+      type,
+      title: `${notebookTitle} — ${type[0].toUpperCase()}${type.slice(1)}`,
+      status: "generating",
+    },
+  });
 
-    try {
-      let content: Prisma.InputJsonValue;
-      if (type === "report") content = await generateReport(notebookId, notebookTitle);
-      else if (type === "flashcards") content = await generateFlashcards(notebookId, notebookTitle);
-      else content = await generateQuiz(notebookId, notebookTitle);
+  await inngest.send({
+    name: "artifact/generate",
+    data: { artifactId: artifact.id, notebookId, notebookTitle, type },
+  });
 
-      return await prisma.artifact.update({
-        where: { id: artifact.id },
-        data: { content, status: "completed" },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to generate artifact";
-      return await prisma.artifact.update({
-        where: { id: artifact.id },
-        data: { status: "failed", errorMessage: message },
-      });
-    }
-  }
+  return artifact; // returns instantly with status "generating"
+}
 
   async getById(id: string) {
     return prisma.artifact.findUnique({ where: { id } });

@@ -45,3 +45,5 @@ next-env.d.ts
 
 Chai-Book-LM-Presentation.pptx
 /src/generated/prisma
+
+/bin

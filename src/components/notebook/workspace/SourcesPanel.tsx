@@ -13,12 +13,15 @@ interface SourcesPanelProps {
   initialSources: Source[];
 }
 
+const POLL_INTERVAL_MS = 3000;
+
 /**
  * Owns the live source list for the workspace sidebar. Adding a source no
- * longer blocks the dialog on extraction/indexing — the dialog closes the
- * instant the request is fired, an optimistic "processing" row appears in
- * the list immediately, and the list is reconciled with real data (status,
- * chunk count, errors) once the background request resolves.
+ * longer blocks the dialog on extraction/indexing: the dialog closes the
+ * instant the request is fired, an optimistic "processing" row appears
+ * immediately, and indexing finishes in a background Inngest job. While any
+ * source is still processing, this panel polls the sources API so the row
+ * flips to completed/failed without a manual refresh.
  */
 export function SourcesPanel({ notebookId, initialSources }: SourcesPanelProps) {
   const router = useRouter();
@@ -30,25 +33,62 @@ export function SourcesPanel({ notebookId, initialSources }: SourcesPanelProps) 
     setSources(initialSources);
   }, [initialSources]);
 
+  // Real (non-optimistic) sources that the background job hasn't finished yet
+  const hasProcessing = sources.some(
+    (s) => s.status === "processing" && !s.id.startsWith("temp-")
+  );
+
+  useEffect(() => {
+    if (!hasProcessing) return;
+
+    let cancelled = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/notebooks/${notebookId}/sources`);
+        if (!res.ok) return;
+        const fresh: Source[] = await res.json();
+        if (cancelled || !Array.isArray(fresh)) return;
+
+        // Keep optimistic placeholders that haven't been replaced yet
+        setSources((prev) => [...prev.filter((s) => s.id.startsWith("temp-")), ...fresh]);
+
+        // Everything finished: sync sibling server components once
+        // (ChatWorkspace's hasSources / sourceCount) and stop polling.
+        if (fresh.every((s) => s.status !== "processing")) {
+          router.refresh();
+        }
+      } catch (err) {
+        console.error("Source polling failed:", err); // transient; next tick retries
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [hasProcessing, notebookId, router]);
+
   function handleOptimisticAdd(temp: Source) {
     setSources((prev) => [temp, ...prev]);
   }
 
   function handleResolved() {
-    // Pulls authoritative data from the server (real _id, status, chunkCount,
+    // Pulls authoritative data from the server (real id, status, chunkCount,
     // or errorMessage on failure) and replaces the optimistic placeholder.
+    // If the new source is still processing, polling picks it up from here.
     router.refresh();
   }
 
   function handleSourceDeleted(sourceId: string) {
     // Remove immediately for a snappy UI, then refresh so sibling server
     // components (e.g. ChatWorkspace's hasSources/sourceCount) stay in sync.
-    setSources((prev) => prev.filter((s) => s._id !== sourceId));
+    setSources((prev) => prev.filter((s) => s.id !== sourceId));
     router.refresh();
   }
 
   function handleSourceUpdated(updated: Source) {
-    setSources((prev) => prev.map((s) => (s._id === updated._id ? { ...s, ...updated } : s)));
+    setSources((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   }
 
   const hasSources = sources.length > 0;
