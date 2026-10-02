@@ -267,8 +267,10 @@ export function UniversalSourceArea({
 
   {step === "youtube" && (
     <p className="mt-2 text-xs text-red-400 leading-relaxed">
-      YouTube often blocks cloud servers from doing this. Try one of our demo
-      notebooks, or upload a <code>.vtt</code> transcript file instead.
+      YouTube may block requests from cloud-hosted servers. To test the YouTube feature, 
+      try running this project on <code>localhost</code>. 
+      Alternatively, upload a <code>.vtt</code> transcript file instead.
+
     </p>
   )}
 </>
