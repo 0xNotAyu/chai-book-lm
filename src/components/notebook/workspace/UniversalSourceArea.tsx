@@ -118,7 +118,7 @@ export function UniversalSourceArea({
     }
 
     onOptimisticAdd?.({
-      _id: `temp-${crypto.randomUUID()}`,
+      id: `temp-${crypto.randomUUID()}`,
       title: truncateTitle(file.name),
       fileName: file.name,
       sourceType,
@@ -147,7 +147,7 @@ export function UniversalSourceArea({
         : { sourceType: step, url: inputValue };
 
     onOptimisticAdd?.({
-      _id: `temp-${crypto.randomUUID()}`,
+      id: `temp-${crypto.randomUUID()}`,
       title: truncateTitle(step === "text" ? inputValue : inputValue),
       url: step === "text" ? undefined : inputValue,
       sourceType: step as Source["sourceType"],

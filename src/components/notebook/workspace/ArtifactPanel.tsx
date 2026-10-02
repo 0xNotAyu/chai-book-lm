@@ -10,7 +10,7 @@ import { QuizView } from "@/components/notebook/workspace/artifacts/QuizView";
 type ArtifactType = "report" | "flashcards" | "quiz";
 
 interface Artifact {
-  _id: string;
+  id: string;
   type: ArtifactType;
   title: string;
   status: "generating" | "completed" | "failed";
@@ -88,7 +88,7 @@ export function ArtifactPanel({ notebookId, type, onClose }: ArtifactPanelProps)
 
   async function handleShare() {
     if (!artifact) return;
-    const url = `${window.location.origin}/share/${artifact._id}`;
+    const url = `${window.location.origin}/share/${artifact.id}`;
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);

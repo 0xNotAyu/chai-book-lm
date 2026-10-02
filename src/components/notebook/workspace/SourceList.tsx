@@ -28,7 +28,7 @@ export type SourceType = 'pdf' | 'youtube' | 'website' | 'text' | 'vtt';
 export type SourceStatus = 'processing' | 'completed' | 'failed';
 
 export interface Source {
-  _id: string;
+  id: string;
   title: string;
   fileName?: string;
   url?: string;
@@ -62,18 +62,18 @@ function SourceItem({
 
   // Optimistic add gives sources a temp-* id before the server responds —
   // nothing to delete/reindex on the backend yet for those.
-  const isTemp = source._id.startsWith("temp-");
+  const isTemp = source.id.startsWith("temp-");
 
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/notebooks/${notebookId}/sources/${source._id}`, {
+      const response = await fetch(`/api/notebooks/${notebookId}/sources/${source.id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete source');
 
-      onDeleted?.(source._id);
+      onDeleted?.(source.id);
       setShowDeleteDialog(false);
     } catch (error) {
       console.error("Error deleting source:", error);
@@ -90,7 +90,7 @@ function SourceItem({
       setIsReindexing(true);
       onUpdated?.({ ...source, status: "processing", errorMessage: null });
 
-      const response = await fetch(`/api/notebooks/${notebookId}/sources/${source._id}`, {
+      const response = await fetch(`/api/notebooks/${notebookId}/sources/${source.id}`, {
         method: "PATCH",
       });
 
@@ -231,7 +231,7 @@ export function SourceList({ notebookId, sources = [], onSourceDeleted, onSource
         ) : (
           sources.map((source) => (
             <SourceItem
-              key={source._id}
+              key={source.id}
               source={source}
               notebookId={notebookId}
               onDeleted={onSourceDeleted}

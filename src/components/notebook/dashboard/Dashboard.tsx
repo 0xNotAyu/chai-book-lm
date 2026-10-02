@@ -46,7 +46,7 @@ async function fetchNotebooks(isRetry = false) {
 
       setNotebooks(
         data.map((notebook: any) => ({
-          id: notebook._id,
+          id: notebook.id,
           title: notebook.title,
           emoji: notebook.emoji,
           sourceCount: notebook.sourceCount ?? 0,
