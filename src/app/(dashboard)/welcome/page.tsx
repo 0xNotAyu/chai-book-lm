@@ -94,12 +94,12 @@ export default function WelcomePage() {
           🍵 ChaiBookLM
         </span>
 
-        <Link
+        {/* <Link
           href={TRY_HREF}
           className="rounded-full bg-[#E8A33D] px-5 py-2 text-sm font-medium text-[#1d1608] transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E8A33D]"
         >
           Try it now
-        </Link>
+        </Link> */}
       </header>
 
       <main>
